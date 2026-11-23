@@ -1,0 +1,12 @@
+<!-- Modified for MambaPad (2026), based on KeysJoy. See LICENSE. -->
+<resources>
+    <item type="id" name="usb_status" />
+    <item type="id" name="control_back" />
+    <item type="id" name="control_layout" />
+    <item type="id" name="control_rotate" />
+    <item type="id" name="control_root" />
+    <item type="id" name="control_keyboard" />
+    <item type="id" name="home_usb" />
+    <item type="id" name="home_bluetooth" />
+<item name="control_ime" type="id"/>
+</resources>

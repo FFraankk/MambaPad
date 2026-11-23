@@ -1,0 +1,16 @@
+MambaPad
+
+This product includes software derived from KeysJoy:
+https://github.com/iFeel-is-a-mouse/KeysJoy
+
+KeysJoy is based on Kontroller by Dima Rostopira:
+https://github.com/rostopira/kontroller
+
+Relevant upstream software is used under Apache License, Version 2.0.
+See the accompanying LICENSE file and the preserved upstream README.
+
+MambaPad modifications (2026): USB transport, Windows receiver, gesture
+state management, permission flow, original interface and icon assets.
+Upstream copyright and license notices are retained in source files.
+
+No endorsement by the upstream authors or any beverage brand is implied.

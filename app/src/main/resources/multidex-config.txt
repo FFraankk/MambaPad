@@ -1,0 +1,2 @@
+com/github/ifeel/keysjoy/Kontroller.class
+com/github/ifeel/keysjoy/SplashScreenActivity.class

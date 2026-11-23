@@ -1,0 +1,9 @@
+<!-- Modified for MambaPad (2026), based on KeysJoy. See LICENSE. -->
+<resources>
+<style name="ManbaBase" parent="android:Theme.Material.Light.NoActionBar">
+<item name="android:fontFamily">sans</item><item name="android:colorAccent">#DA4320</item>
+<item name="android:windowLightStatusBar">true</item><item name="android:windowLightNavigationBar">true</item>
+<item name="android:statusBarColor">#FFF8EB</item><item name="android:navigationBarColor">#FFF8EB</item>
+<item name="android:windowBackground">#FFF8EB</item><item name="android:windowActionModeOverlay">true</item>
+</style><style name="SplashStyle" parent="ManbaBase"/><style name="AppStyle" parent="ManbaBase"/>
+<style name="AppStyle.NoActionBar" parent="ManbaBase"/></resources>

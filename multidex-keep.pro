@@ -1,0 +1,3 @@
+-keep class com.github.ifeel.keysjoy.Kontroller
+-keep class com.github.ifeel.keysjoy.SplashScreenActivity
+-keep class com.github.ifeel.keysjoy.SelectDeviceActivity

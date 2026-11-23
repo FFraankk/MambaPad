@@ -1,0 +1,50 @@
+<!-- Modified for MambaPad (2026), based on KeysJoy. See LICENSE. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools"
+          package="com.github.ifeel.keysjoy">
+
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false"/>
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false"/>
+
+    <application
+        android:name=".Kontroller"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="false"
+        android:theme="@style/AppStyle"
+        tools:ignore="GoogleAppIndexingWarning">
+
+        <activity
+            android:name=".SplashScreenActivity"
+            android:theme="@style/SplashStyle"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".UsbTouchpadActivity"
+                  android:windowSoftInputMode="adjustResize"
+                  android:theme="@style/AppStyle.NoActionBar"
+                  android:exported="true" />
+
+        <activity android:name=".SelectDeviceActivity"
+                  android:theme="@style/AppStyle.NoActionBar"
+                  android:configChanges="orientation|screenSize|keyboardHidden"
+                  android:windowSoftInputMode="adjustResize"
+                  android:exported="false"
+        />
+
+    </application>
+</manifest>
