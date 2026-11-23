@@ -267,7 +267,7 @@ object BluetoothController: BluetoothHidDevice.Callback(), BluetoothProfile.Serv
         try {
             super.onAppStatusChanged(pluggedDevice, registered)
             Log.i(TAG, "onAppStatusChanged: registered=$registered, device=$pluggedDevice")
-            
+
             if (registered) {
                 mpluggedDevice = pluggedDevice
                 pluggedDevice?.let { dev ->
