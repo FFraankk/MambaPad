@@ -22,7 +22,8 @@ import android.widget.Button
 class UsbSmokeInstrumentation : Instrumentation() {
     private var feedbackPreview=false
     private var homePreview=false
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments);feedbackPreview=arguments?.getString("feedback_preview")=="true";homePreview=arguments?.getString("home_preview")=="true"; start() }
+    private var landscapeImeOnly=false
+    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments);landscapeImeOnly=arguments?.getString("landscape_ime_only")=="true";feedbackPreview=arguments?.getString("feedback_preview")=="true";homePreview=arguments?.getString("home_preview")=="true"; start() }
 
     private fun openConnected(): Activity {
         val activity = startActivitySync(Intent(targetContext, UsbTouchpadActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -73,6 +74,13 @@ class UsbSmokeInstrumentation : Instrumentation() {
         val previousKeyboard=uiPrefs.getBoolean("keyboard",false)
         try {
             var activity = openConnected()
+            if(landscapeImeOnly) {
+                activity=orient(activity,true);keyboard(activity,true)
+                verifyLandscapeIme(activity)
+                uiPrefs.edit().putBoolean("keyboard",previousKeyboard).commit()
+                result.putString("result","PASS: landscape system IME regression")
+                finish(Activity.RESULT_OK,result);return
+            }
             activity = orient(activity, false)
             verifyKeyboardUi(activity)
             result.putString("keyboard_ui", "PASS: native IME commits Chinese/emoji, keeps composition local, and emits deletion")
@@ -118,6 +126,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
             activity = openConnected()
             result.putString("lifecycle", "PASS: activity close and reopen reconnected")
             verifyLayoutsAndNavigation(activity)
+            result.putString("landscape_ime", "PASS: system IME, composing/commit, close/Back, rapid toggle and rotation")
             result.putString("layouts_navigation", "PASS: four layouts, USB/BT home buttons, and Bluetooth system Back")
             result.putString("result", "PASS")
             uiPrefs.edit().putBoolean("keyboard",previousKeyboard).commit()
@@ -208,6 +217,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
             check(pad.width in (root.width*0.40f).toInt()..(root.width*0.60f).toInt())
         }
         screenshot("control-landscape-keyboard")
+        a=verifyLandscapeIme(a)
         a=orient(a,false)
         runOnMainSync {
             val root=a.findViewById<View>(R.id.control_root);val pad=a.findViewById<View>(R.id.simple_trackpad_touch)
@@ -228,6 +238,65 @@ class UsbSmokeInstrumentation : Instrumentation() {
             a.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,android.view.KeyEvent.KEYCODE_BACK))
         }
         runOnMainSync{check(home.findViewById<View>(R.id.home_usb)!=null)}
+    }
+
+    private fun verifyLandscapeIme(initial:Activity):Activity {
+        var a=initial
+        fun awaitState(message:String,condition:()->Boolean) {
+            repeat(50) {
+                var ok=false
+                runOnMainSync{ok=condition()}
+                if(ok)return
+                SystemClock.sleep(100)
+            }
+            error(message)
+        }
+        fun splitVisible()=a.findViewById<View>(R.id.control_left_panel)?.isShown==true && a.findViewById<View>(R.id.control_right_panel)?.isShown==true
+        fun imeVisible()=androidx.core.view.ViewCompat.getRootWindowInsets(a.findViewById(R.id.control_root))?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())==true
+        fun open() {
+            runOnMainSync{a.findViewById<Button>(R.id.control_system_ime).performClick()}
+            awaitState("Landscape IME did not appear"){imeVisible() && a.findViewById<View>(R.id.control_ime).isShown}
+            waitForIdleSync();SystemClock.sleep(500)
+            screenshot("control-landscape-system-ime")
+            runOnMainSync {
+                val root=a.findViewById<View>(R.id.control_root)
+                val pad=a.findViewById<View>(R.id.simple_trackpad_touch)
+                val left=a.findViewById<View>(R.id.btn_mouse_left)
+                check(!splitVisible()){"Split keyboard overlaps system IME"}
+                check(pad.width>root.width*0.65f && pad.height>=a.resources.displayMetrics.density*48){"IME touch surface unusable: ${pad.width}x${pad.height}"}
+                check(left.isShown && left.height>0)
+            }
+        }
+        awaitState("Landscape split keyboard opened IME automatically"){splitVisible() && !imeVisible()}
+        runOnMainSync{check(a.findViewById<Button>(R.id.control_system_ime).text.toString()=="系统输入法")}
+        open()
+        verifyKeyboardUi(a)
+        screenshot("control-landscape-system-ime")
+        // Simulate the IME's own hide arrow, rather than the app's close button.
+        runOnMainSync{a.findViewById<com.github.ifeel.keysjoy.ui.RemoteImeEditor>(R.id.control_ime).hideKeyboard()}
+        awaitState("IME hide did not restore split keyboard"){splitVisible() && !imeVisible()}
+        open()
+        runOnMainSync{a.findViewById<View>(R.id.control_ime_hide).performClick()}
+        awaitState("Close did not restore split keyboard"){splitVisible() && !imeVisible()}
+        open()
+        runOnMainSync {
+            a.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,android.view.KeyEvent.KEYCODE_BACK))
+            a.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,android.view.KeyEvent.KEYCODE_BACK))
+        }
+        awaitState("Back left the control page or failed to close IME"){!a.isFinishing && splitVisible() && !imeVisible()}
+        runOnMainSync {
+            a.findViewById<View>(R.id.control_system_ime).performClick()
+            a.findViewById<View>(R.id.control_system_ime).performClick()
+        }
+        SystemClock.sleep(500)
+        awaitState("Rapid toggle left a delayed IME"){splitVisible() && !imeVisible()}
+        open()
+        a=orient(a,false)
+        awaitState("Portrait IME missing after rotation"){imeVisible() && a.findViewById<View>(R.id.control_ime).isShown}
+        a=orient(a,true)
+        awaitState("Rotation failed to restore landscape split mode"){splitVisible() && !imeVisible()}
+        screenshot("control-landscape-system-ime-restored")
+        return a
     }
 
     private class Capture : MouseInputSender {

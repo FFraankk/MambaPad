@@ -55,13 +55,17 @@ open class ControlActivity : Activity() {
         keyboard=prefs.getBoolean("keyboard",false)
         speed=prefs.getInt("speed",getSharedPreferences("usb",MODE_PRIVATE).getInt("mouse_speed",2)).coerceIn(speeds.indices)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if(Build.VERSION.SDK_INT>=33)onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT){goHome()}
+        if(Build.VERSION.SDK_INT>=33)onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT){navigateBack()}
         rebuildUi()
     }
     private fun rebuildUi() {
         runCatching{gesture?.cancelAndRelease()}
         gesture=null;held.clear();modifiers.reset()
         if(::screen.isInitialized)screen.editor?.hideKeyboard()
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+            if(resources.configuration.orientation==Configuration.ORIENTATION_LANDSCAPE)
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+            else WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED)
         screen=ControlScreen(this,bluetooth,keyboard,modifiers)
         setContentView(screen.root)
         screen.back.setOnClickListener{goHome()}
@@ -75,11 +79,15 @@ open class ControlActivity : Activity() {
         screen.connect.setOnClickListener{connectionAction()}
         screen.onKey={usage,mask->screen.editor?.resetContext();sendKey(usage,mask)}
         screen.onText={count,text->sendText(count,text)}
-        screen.editor?.postDelayed({screen.editor?.showKeyboard()},200)
+        screen.onImeModeChanged={runCatching{gesture?.cancelAndRelease()};held.clear();screen.resetModifiers()}
+        val currentScreen=screen
+        if(screen.autoShowKeyboard)screen.editor?.postDelayed({
+            if(screen===currentScreen && currentScreen.root.isAttachedToWindow)currentScreen.editor?.showKeyboard()
+        },200)
         screen.connection(connected)
         bindMouse()
     }
-    override fun onResume(){super.onResume();startSession()}
+    override fun onResume(){super.onResume();screen.hostResumed(true);startSession()}
     private fun startSession() {
         stopSession()
         val current=generation
@@ -248,7 +256,8 @@ open class ControlActivity : Activity() {
         finish()
     }
     @Deprecated("Legacy Android back navigation")
-    override fun onBackPressed(){goHome()}
-    override fun onPause(){stopSession();super.onPause()}
+    override fun onBackPressed(){navigateBack()}
+    private fun navigateBack(){if(!screen.hideSystemIme())goHome()}
+    override fun onPause(){screen.hostResumed(false);stopSession();super.onPause()}
     override fun onDestroy(){stopSession();super.onDestroy()}
 }

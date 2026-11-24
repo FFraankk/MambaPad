@@ -6,6 +6,10 @@
     <item type="id" name="control_rotate" />
     <item type="id" name="control_root" />
     <item type="id" name="control_keyboard" />
+    <item type="id" name="control_system_ime" />
+    <item type="id" name="control_ime_hide" />
+    <item type="id" name="control_left_panel" />
+    <item type="id" name="control_right_panel" />
     <item type="id" name="home_usb" />
     <item type="id" name="home_bluetooth" />
 <item name="control_ime" type="id"/>
