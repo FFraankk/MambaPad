@@ -52,7 +52,7 @@
 
 长期开发入口：[项目约定](AGENTS.md)、[开发协作](CONTRIBUTING.md)、[架构](docs/ARCHITECTURE.md)、[路线图](docs/ROADMAP.md)、[发布流程](docs/RELEASING.md)、[多电脑开发](docs/MULTI_MACHINE.md)、[当前交接](docs/HANDOFF.md)。
 
-1.3.0 开发版已通过 20 项 JVM 单测、Go 单测与 vet，以及小米 10 / Android 11 的整套应用内真机回归，覆盖手势、反馈触发次数、四种布局、返回、输入法和生命周期。Windows 已实测连接、托盘隐藏、跨副本单实例和安装／覆盖升级／卸载；具体边界见验证记录。完整 Android lint 仍有 41 个既有错误，未屏蔽或添加 baseline。
+1.3.0-preview 已通过 20 项 JVM 单测、Go 单测与 vet，以及小米 10 / Android 11 的整套应用内真机回归，覆盖手势、反馈触发次数、四种布局、返回、输入法和生命周期。Windows 已实测连接、托盘隐藏、跨副本单实例和安装／覆盖升级／卸载；具体边界见验证记录。完整 Android lint 仍有 41 个既有错误，未屏蔽或添加 baseline。
 
 参考：[输入协议](docs/protocol-v1.md)、[1.3 验证记录](docs/desktop-haptics-1.3.md)、[1.2 验证记录](docs/shared-controls-1.2.md)。
 

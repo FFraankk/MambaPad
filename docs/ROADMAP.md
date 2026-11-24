@@ -2,7 +2,7 @@
 
 以下为计划，不是要求代理自动执行的任务。按用户当次需求选择工作项；完成后更新状态和证据。
 
-## 当前基线（2026-11-24）
+## 1.2 基线（2026-11-24）
 
 - 已发布：[v1.2.2-preview](https://github.com/FFraankk/MambaPad/releases/tag/v1.2.2-preview)。Android versionCode 8，debug 签名；Windows EXE 未签名。
 - USB 触控、键盘、系统输入法中文/英文/表情，横竖屏与返回页面可用。
@@ -11,9 +11,9 @@
 - 完整 Android lint 最近记录为 41 个既有错误，主要涉及旧蓝牙权限与常量；新增任务需重新看报告，不能把这个数字当作永久允许值。
 - 电脑接收端已按用户要求关闭；后续不要为文档检查重新启动。
 
-## 1.3.0 预发布
+## 当前版本：1.3.0 预发布
 
-- 1.3.0-preview：触觉反馈、Windows 原生窗口／托盘、单实例与便携／安装两种分发已实现。
+- [1.3.0-preview](https://github.com/FFraankk/MambaPad/releases/tag/v1.3.0-preview)：触觉反馈、Windows 原生窗口／托盘、单实例与便携／安装两种分发已实现。
 - Android 构建／JVM／应用内真机回归、Go test/vet，以及真实安装／覆盖升级／卸载已验证，详细边界见 [验证记录](desktop-haptics-1.3.md)。
 
 ## 优先级 1：稳定开发基础

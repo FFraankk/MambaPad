@@ -25,6 +25,8 @@
 
 ## 分发
 
+- [v1.3.0-preview](https://github.com/FFraankk/MambaPad/releases/tag/v1.3.0-preview) 已发布；标签指向 6fc6aff633aa40932d23f6c0b754c2d337a8c010，5 个附件的远程大小与 SHA256 均已比对一致。
+
 - Android APK／ZIP、Windows 便携 ZIP、安装 EXE 与 SHA256 校验文件作为 Release 附件，产物不进入源码 Git 历史。
 - 便携 ZIP 不含运行数据、设备授权或密钥。安装器按当前用户安装；Windows EXE／安装器未签名。
 - 两种 Windows 包使用同一接收 EXE，ADB 使用按内容版本划分的目录，升级不强制终止共享 ADB。
