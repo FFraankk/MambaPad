@@ -2,7 +2,16 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'branding/screenshots/**'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'branding/screenshots/**'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

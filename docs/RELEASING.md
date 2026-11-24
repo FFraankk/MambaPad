@@ -46,7 +46,7 @@ GitHub CLI 如需登录，让用户通过网页完成授权；认证信息只交
 
 ## GitHub Actions 自动发布
 
-- `CI`：main push 和所有 PR 检查 Android 构建/JVM 单测、Windows Go test/vet/build，不使用签名 Secrets、不发布。
+- `CI`：main push 和 PR 在包含程序、测试或构建配置等非文档变更时检查 Android 构建/JVM 单测、Windows Go test/vet/build；仅修改 Markdown、docs/ 或界面截图时跳过。可在 Actions 中手动运行 CI。不使用签名 Secrets、不发布；Release 的标签／手动触发不受此过滤影响。
 - `Release` → Run workflow（main）：使用统一预览签名编译、打包、校验证书及版本，在最终阶段汇总四个发行包与校验清单到 `verified-release` artifact，保留 7 天；不创建或更新 Release。
 - 推送新标签 `vVERSION`：标签必须等于 app/build.gradle 的 versionName。全部构建/单测/打包通过后，创建草稿、上传五项附件、比对远程大小与 SHA256，再公开发布。已有同名 Release 时拒绝覆盖；失败草稿保留以便检查，不自动删除或替换。
 - 名称含连字符的版本（如 `v1.3.1-preview`）自动预发布且不设 Latest；无预览后缀的正式版本标签会正式发布并设 Latest。因此仅在用户已决定正式发行时推送正式标签。现有 `v1.3.0-preview` 和附件保持原样。
