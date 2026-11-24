@@ -31,5 +31,7 @@
 - 工具、签名、认证、缓存与产物留在 touchpad 工作区；不提交本机路径、凭据或密钥。已保留构建缓存，不预设其他机器具备相同环境。
 - 已实现 CI（push/PR 构建测试）与 Release（手动签名打包验证、版本标签自动发布），Actions 固定提交 SHA，发布时校验 APK 证书、身份及版本，草稿附件摘要核验后才公开；不覆盖既有 Release。
 - 已配置四项 Android 签名 Secrets，沿用现有预览证书；密钥加密备份已完成解密比对、实际恢复和篡改拒绝测试。备份及恢复口令当前仍在本机，用户须分开转存离线介质。正式签名迁移和 Windows 代码签名未实施。
-- 本地通过 Android 构建/JVM 单测、Windows Go test/vet/双包打包、Actions 静态检查、版本标签不匹配/缺失签名拒绝，以及四附件与校验清单检查。待 GitHub workflow 权限网页授权后推送并执行云端 CI 与手动 Release 验证；尚不能宣称云端已通过。
+- 本地通过 Android 构建/JVM 单测、Windows Go test/vet/双包打包、Actions 静态检查、版本标签不匹配/缺失签名拒绝，以及四附件与校验清单检查。已推送至 main 并完成云端验证，源码提交 ccb02aed0a4100ae59d1d22d98a54002e5f44ae1：普通 [CI](https://github.com/FFraankk/MambaPad/actions/runs/45416727421) 及手动 [Release 验证](https://github.com/FFraankk/MambaPad/actions/runs/45416726993) 均通过，publish 按预期跳过。
+- 已下载云端 verified-release：四包 SHA256、ZIP CRC、APK 证书指纹均符合；便携 EXE 嵌入的 vcs.revision 等于上述提交且 vcs.modified=false。云端产物仅为验证 artifact（保留 7 天），未创建新版本，也未修改公开 1.3.0-preview 标签或附件。
+- 标签发布分支本次未实际发布新版本；本地已检查手动运行禁止发布、同名 Release 拒绝覆盖及错误证书拒绝。自动构建不替代实际手机、托盘或安装测试。
 - 下一项实施由用户请求确定；路线图与咨询不自动成为任务。系统变更和真实设备测试先核对当前会话授权，不重复索取已有授权。
