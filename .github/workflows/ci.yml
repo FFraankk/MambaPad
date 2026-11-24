@@ -21,7 +21,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Prepare SDK
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - name: Build and run JVM tests (no signing secrets)
         run: sh ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process assembleDebug testDebugUnitTest
   windows:
