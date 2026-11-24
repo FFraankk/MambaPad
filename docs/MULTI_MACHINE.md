@@ -20,7 +20,7 @@ git status
 
 每台电脑自行配置 GitHub 登录。本机 SDK/JDK/Go 路径写在未跟踪的本地配置或当前进程环境变量中，不写进共享源码。工具版本以 Gradle Wrapper、Gradle 配置和 go.mod 为依据。
 
-现阶段构建需要 JDK 17+、Android SDK 35、Go 1.25+；拟在 CI 固定经过验证的具体版本，避免各电脑随意追最新版本。工具、缓存和输出仍放在 touchpad 工作区；实际初始化脚本尚待实现，当前按 BUILDING.md 配置。
+现阶段构建需要 JDK 17+、Android SDK 35、Go 1.25+；CI 固定 JDK 21、SDK 35、Go 1.27.4 等具体版本，避免各电脑随意追最新版本。工具、缓存和输出仍放在 touchpad 工作区；实际初始化脚本尚待实现，当前按 BUILDING.md 配置。
 
 ## 切换电脑的日常步骤
 
@@ -52,13 +52,13 @@ Git 的 --ff-only 会在不能快进时拒绝合并，便于发现两台机器�
 | GitHub 凭据、ADB 私钥、日志、签名密钥 | 不进公开仓库；授权和私密备份单独管理 |
 | 真机/桌面实测结果 | 把版本、环境和结论同步进文档，不默认别的机器也通过 |
 
-## 构建与签名：换机前要解决
+## 构建与签名
 
-- 普通 push/PR：只做构建、单测和产物上传，不自动发布 Release。
-- 明确发布版本：从确定提交构建，测试后产生 ZIP、SHA256 和预发布草稿；核对完成后再发布。
+- 普通 push/PR：只做构建和单测，不使用发布签名、不自动发布 Release。
+- 手动运行 Release 工作流（main）可下载统一签名的验证产物；推送新版本标签才自动打包、核验并发布。
 - Actions artifacts 可供不同电脑下载构建结果；面向用户的版本仍放 Releases。[GitHub 官方说明](https://docs.github.com/en/actions/tutorials/store-and-share-data)
 - Windows Go 测试需要 Windows runner；Android 编译/JVM 测试可单独运行。USB、蓝牙和真实桌面行为不能仅靠云端构建证明通过。
 
-MambaPad 现有 APK 使用本机 debug 密钥。换电脑或换 CI runner 自动生成的新 debug 密钥可能无法覆盖安装旧 APK。要先确定统一的测试签名或正式签名迁移方案，密钥做独立私密备份，不通过公开 Git 仓库同步，也不把 Base64 当加密。
+MambaPad 现有 APK 沿用同一预览 debug 密钥。Actions 已通过仓库 Secrets 注入该密钥，生成 APK 后与公开证书指纹比对，避免 runner 自动生成新密钥导致无法覆盖安装。新电脑可下载 Release 或手动 Release 工作流的产物；若本地覆盖安装，须从私密备份恢复密钥并设置 BUILDING.md 中的签名环境变量。不要卸载用户应用来绕过签名不匹配。
 
-未来 CI 可使用 GitHub Actions Secrets 注入签名材料，但它不代替离线私密备份；先决定旧用户升级路径，再切换证书。[GitHub Secrets 文档](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
+密钥与口令不通过公开 Git 同步，Base64 不是加密。已提供加密备份和恢复脚本，仍须将备份与恢复口令分开离线保存。签名 Secrets、标签发布规则及恢复步骤见 [发布流程](RELEASING.md)。正式签名迁移尚未实施。

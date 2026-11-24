@@ -2,14 +2,15 @@ param(
     [string]$GoExe = 'go',
     [Parameter(Mandatory = $true)][string]$AdbDirectory,
     [Parameter(Mandatory = $true)][string]$GoLicense,
-    [Parameter(Mandatory = $true)][string]$ISCC
+    [Parameter(Mandatory = $true)][string]$ISCC,
+    [string]$OutputDirectory
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $gradle = Get-Content -LiteralPath (Join-Path $projectRoot 'app/build.gradle') -Raw
 $version = [regex]::Match($gradle, 'versionName "([^\"]+)"').Groups[1].Value
 if (-not $version -or $version -notmatch '^[A-Za-z0-9.-]+$') { throw 'Invalid versionName' }
-$outputRoot = Join-Path $projectRoot "dist/windows-$version"
+$outputRoot = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $projectRoot "dist/windows-$version" }
 if (Test-Path -LiteralPath $outputRoot) { throw "Output already exists: $outputRoot. Use a fresh version or move the previous output aside." }
 foreach ($file in @('adb.exe','AdbWinApi.dll','AdbWinUsbApi.dll','NOTICE.txt','source.properties')) {
     if (-not (Test-Path -LiteralPath (Join-Path $AdbDirectory $file))) { throw "Missing ADB file: $file" }

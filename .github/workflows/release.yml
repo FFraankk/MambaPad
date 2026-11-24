@@ -1,0 +1,125 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: version
+        run: python3 scripts/ci-release.py metadata
+  android:
+    needs: metadata
+    # Manual validation may use secrets only from the trusted default branch.
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build with the existing preview certificate
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          MAMBAPAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MAMBAPAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          MAMBAPAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          MAMBAPAD_REQUIRE_SIGNING: 'true'
+        run: |
+          set -euo pipefail
+          export MAMBAPAD_KEYSTORE_PATH="$RUNNER_TEMP/mambapad-preview.keystore"
+          trap 'rm -f "$MAMBAPAD_KEYSTORE_PATH"' EXIT
+          umask 077
+          python3 -c 'import base64,os,pathlib; pathlib.Path(os.environ["MAMBAPAD_KEYSTORE_PATH"]).write_bytes(base64.b64decode(os.environ["KEYSTORE_BASE64"],validate=True))'
+          unset KEYSTORE_BASE64
+          sh ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process assembleDebug testDebugUnitTest
+          python3 scripts/ci-release.py android --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-android
+          path: dist/android/*
+          if-no-files-found: error
+          retention-days: 7
+  windows:
+    needs: metadata
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Prepare pinned official packaging tools
+        shell: pwsh
+        run: ./scripts/prepare-ci-windows.ps1
+      - name: Build portable ZIP and installer
+        shell: pwsh
+        run: |
+          ./scripts/package-windows.ps1 -AdbDirectory "$env:RUNNER_TEMP/mambapad-tools/adb/platform-tools" -GoLicense "$(go env GOROOT)/LICENSE" -ISCC "$env:RUNNER_TEMP/mambapad-tools/inno/{app}/ISCC.exe"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-windows
+          path: |
+            dist/windows-${{ needs.metadata.outputs.version }}/*-Portable.zip
+            dist/windows-${{ needs.metadata.outputs.version }}/*-Setup.exe
+          if-no-files-found: error
+          retention-days: 7
+  assemble:
+    needs: [android, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist/release
+      - run: python3 scripts/ci-release.py manifest
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-release
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    needs: assemble
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: verified-release
+          path: dist/release
+      - name: Verify remote draft assets, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci-release.py publish

@@ -2,6 +2,14 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
+def signingEnvironment = ['MAMBAPAD_KEYSTORE_PATH', 'MAMBAPAD_STORE_PASSWORD',
+                          'MAMBAPAD_KEY_ALIAS', 'MAMBAPAD_KEY_PASSWORD']
+def suppliedSigning = signingEnvironment.collect { System.getenv(it) }
+if ((suppliedSigning.any { it } || System.getenv('MAMBAPAD_REQUIRE_SIGNING') == 'true') &&
+        !suppliedSigning.every { it }) {
+    throw new GradleException('All MAMBAPAD signing environment variables are required')
+}
+
 android {
     namespace 'com.github.ifeel.keysjoy'
     compileSdk 35
@@ -22,6 +30,16 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    signingConfigs {
+        debug {
+            if (suppliedSigning.every { it }) {
+                storeFile file(suppliedSigning[0])
+                storePassword suppliedSigning[1]
+                keyAlias suppliedSigning[2]
+                keyPassword suppliedSigning[3]
+            }
+        }
     }
     buildTypes {
         debug {

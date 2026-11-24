@@ -85,3 +85,11 @@ adb -s SERIAL shell am instrument -w com.github.ifeel.keysjoy.usb.test/com.githu
 MIUI 下可能需要将目标 Activity 带到前台。测试完成后按会话约定移除 `com.github.ifeel.keysjoy.usb.test`，保留主包；恢复应用状态，并关闭本次启动的接收端（若用户明确希望保留则遵从）。不要关闭测试前已有的其他服务或使用 kill-server 清理全部 ADB。
 
 选择验证范围见 [CONTRIBUTING.md](CONTRIBUTING.md)，打包与发布见 [docs/RELEASING.md](docs/RELEASING.md)。
+
+## Actions 与统一预览签名
+
+普通 push/PR 运行 Android 构建、JVM 单测和 Windows Go test/vet/build，不读取发布签名、不分发随机证书的 APK。手动运行 Release 工作流会构建四个发行包和 SHA256SUMS.txt，产物保留 7 天；只有推送版本标签才发布。详见 [发布流程](docs/RELEASING.md)。
+
+发布仍使用 debug 构建及现有预览证书，尚未迁移正式签名。本地需要覆盖现有预览版时，在当前进程设置 `MAMBAPAD_KEYSTORE_PATH`、`MAMBAPAD_STORE_PASSWORD`、`MAMBAPAD_KEY_ALIAS`、`MAMBAPAD_KEY_PASSWORD`；四项必须一起提供。`MAMBAPAD_REQUIRE_SIGNING=true` 禁止缺少配置时退回自动生成的 debug 密钥。普通本地开发未设置这些变量时保留 Gradle 默认行为，其 APK 不保证可覆盖已发布版本。
+
+`config/android-signing.sha256` 只保存公开证书指纹。`scripts/ci-release.py android --apksigner <工具路径> --aapt <工具路径>` 校验 APK 签名、包名、versionName/versionCode 后生成 Android 发行包；证书不符即拒绝。不要为了让检查通过而替换可信指纹。
