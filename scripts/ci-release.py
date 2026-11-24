@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def run(*args):
-    return subprocess.check_output(args, text=True).strip()
+    return subprocess.check_output(args, text=True, encoding="utf-8").strip()
 
 
 def metadata():
@@ -87,6 +87,16 @@ def manifest(directory):
     print('Four release packages and SHA256 manifest verified')
 
 
+def find_release(repo, tag):
+    # The tag endpoint may return 404 for drafts; list includes accessible drafts.
+    pages = json.loads(run('gh', 'api', '--paginate', '--slurp',
+                           f'repos/{repo}/releases?per_page=100'))
+    matches = [release for page in pages for release in page if release['tag_name'] == tag]
+    if len(matches) > 1:
+        raise ValueError('Multiple releases use the requested tag')
+    return matches[0] if matches else None
+
+
 def publish(directory):
     version, _ = metadata()
     tag = 'v' + version
@@ -95,9 +105,8 @@ def publish(directory):
     if os.environ.get('GITHUB_EVENT_NAME') != 'push' or os.environ.get('GITHUB_REF') != 'refs/tags/' + tag:
         raise ValueError('Publishing requires an explicit version tag push')
     # An existing release (including a draft) is never overwritten.
-    existing = subprocess.run(['gh', 'api', f'repos/{repo}/releases/tags/{tag}'], capture_output=True, text=True)
-    if existing.returncode == 0 or 'HTTP 404' not in existing.stderr:
-        raise ValueError('Release already exists, or its absence could not be verified')
+    if find_release(repo, tag) is not None:
+        raise ValueError('Release already exists; refusing to overwrite it')
     if json.loads(run('gh', 'api', f'repos/{repo}/commits/{tag}'))['sha'] != sha:
         raise ValueError('Remote tag differs from the built commit')
     names = assets(version) + ['SHA256SUMS.txt']
@@ -119,7 +128,9 @@ def publish(directory):
         command.append('--prerelease')
     run(*command)
     run('gh', 'release', 'upload', tag, '--repo', repo, *(str(directory / n) for n in names))
-    release = json.loads(run('gh', 'api', f'repos/{repo}/releases/tags/{tag}'))
+    release = find_release(repo, tag)
+    if release is None:
+        raise ValueError('Created draft could not be found; inspect releases before retrying')
     if len(release['assets']) != len(names):
         raise ValueError('Incorrect remote asset count; draft retained')
     for asset in release['assets']:
@@ -128,7 +139,7 @@ def publish(directory):
             raise ValueError('Remote asset digest differs; draft retained')
     run('gh', 'release', 'edit', tag, '--repo', repo, '--draft=false',
         '--prerelease=' + str(preview).lower(), '--latest=' + str(not preview).lower())
-    release = json.loads(run('gh', 'api', f'repos/{repo}/releases/tags/{tag}'))
+    release = json.loads(run('gh', 'api', f'repos/{repo}/releases/{release["id"]}'))
     if release['draft'] or release['prerelease'] != preview:
         raise ValueError('Unexpected public release state')
     print(release['html_url'])

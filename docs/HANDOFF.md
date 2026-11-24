@@ -3,7 +3,8 @@
 ## 当前状态
 
 - 仓库：https://github.com/FFraankk/MambaPad 。main 与 develop 的功能代码已通过 PR #2 合并，功能提交为 5666d8e79e643359904aa80a8f2681094826d9de。
-- 当前发布目标为 1.3.0 正式版（versionCode 10），通过 v1.3.0 标签触发 Actions 构建和发布；最终公开状态以 GitHub Release 为准。旧 v1.3.0-preview 标签及附件保持不变。
+- [v1.3.0](https://github.com/FFraankk/MambaPad/releases/tag/v1.3.0) 已于 2026-11-25 正式公开并设为 Latest，versionCode 10。标签指向 8cb9999d89deb710e5ef843d616af540d3fd9d22；旧 v1.3.0-preview 标签及附件保持不变。
+- 五项公开附件已下载，逐项核对远程摘要、SHA256SUMS、ZIP CRC、许可、APK 身份及可信证书；Windows EXE 的 vcs.revision 等于发布标签提交，vcs.modified=false。
 - Android 继续使用现有 debug 构建及兼容证书；Windows 未签名。主要支持 USB＋Windows，蓝牙兼容性仍在完善。
 
 ## 已完成与验证
@@ -18,5 +19,6 @@
 
 - 测试辅助 APK 已移除，保留手机主包；本轮接收端已退出，共享 ADB 未终止。
 - 工具、凭据、签名与构建产物不进入 Git。签名离线恢复方式见 RELEASING.md；正式签名迁移与 Windows 代码签名未实施。
-- CI 校验构建与单测；Release 工作流校验证书、版本、包完整性、远程摘要后发布五项附件。自动构建不替代设备或安装实测。
+- 1.3.0 的 [Release 构建](https://github.com/FFraankk/MambaPad/actions/runs/45462563480) 中 Android、Windows、包汇总均通过；最终草稿查询因按标签接口返回 404 而停止。维护者核验既有草稿的五项附件后完成公开发布，没有覆盖标签或重新上传附件。
+- main 已修复草稿查询：分页列出可访问 Release，包含草稿；公开后用 ID 核验。4 项回归检查、真实草稿查询及 Actions 静态检查通过；后续发布在 metadata 阶段运行回归检查。自动构建不替代设备或安装实测。
 - 下一项实施由用户请求确定，不自动实施路线图或咨询中的设想。
