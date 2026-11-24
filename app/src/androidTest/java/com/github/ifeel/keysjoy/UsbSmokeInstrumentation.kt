@@ -20,8 +20,9 @@ import android.widget.Button
  * Moves only: it never clicks a potentially unrelated Windows application.
  */
 class UsbSmokeInstrumentation : Instrumentation() {
+    private var feedbackPreview=false
     private var homePreview=false
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments);homePreview=arguments?.getString("home_preview")=="true"; start() }
+    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments);feedbackPreview=arguments?.getString("feedback_preview")=="true";homePreview=arguments?.getString("home_preview")=="true"; start() }
 
     private fun openConnected(): Activity {
         val activity = startActivitySync(Intent(targetContext, UsbTouchpadActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -37,6 +38,21 @@ class UsbSmokeInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if(feedbackPreview) {
+            val result=Bundle()
+            try {
+                val activity=openConnected()
+                runOnMainSync {
+                    com.github.ifeel.keysjoy.ui.TouchFeedback.perform(activity.findViewById(R.id.simple_trackpad_touch))
+                    fun buttons(v:View):List<Button> = if(v is Button)listOf(v) else if(v is ViewGroup)(0 until v.childCount).flatMap{buttons(v.getChildAt(it))} else emptyList()
+                    buttons(activity.window.decorView).first{it.text.toString()=="设置"}.performClick()
+                }
+                screenshot("feedback-settings")
+                result.putString("result","PASS: system touch feedback requested and settings preview captured")
+                finish(Activity.RESULT_OK,result)
+            }catch(e:Throwable){result.putString("error",e.toString());finish(Activity.RESULT_CANCELED,result)}
+            return
+        }
         if(homePreview) {
             val result=Bundle()
             try {
@@ -217,6 +233,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
     private class Capture : MouseInputSender {
         val moves = mutableListOf<Pair<Int, Int>>()
         var clicks = 0
+        var haptics = 0
         val wheel = mutableListOf<Pair<Int,Int>>()
         var scrolls = 0
         var rightClicks = 0
@@ -238,7 +255,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
             val capture=Capture()
             lateinit var listener:ViewListener
             lateinit var view:View
-            runOnMainSync {listener=ViewListener(capture).apply{mouseSpeed=1f;scrollSpeed=0.1f;rampEnabled=false};view=View(activity)}
+            runOnMainSync {listener=ViewListener(capture).apply{mouseSpeed=1f;scrollSpeed=0.1f;rampEnabled=false;onHaptic={capture.haptics++}};view=View(activity)}
             var downTime=SystemClock.uptimeMillis()
             val send={action:Int,x:Float,y:Float,wheelButton:Boolean->
                 runOnMainSync {
@@ -256,23 +273,27 @@ class UsbSmokeInstrumentation : Instrumentation() {
             check(c.down==0){"Holding a single touch started selection"}
             send(MotionEvent.ACTION_MOVE,200f,500f,false)
             send(MotionEvent.ACTION_UP,200f,500f,false)
+            check(c.haptics==0){"Movement must not vibrate"}
             check(c.down==0&&c.up==0&&c.clicks==0&&c.moves.isNotEmpty()){ "Plain move became a drag" }
         }
         scenario{_,c,send->
             send(MotionEvent.ACTION_DOWN,200f,400f,false)
             SystemClock.sleep(50);send(MotionEvent.ACTION_UP,200f,400f,false)
+            check(c.haptics==1){"First tap must acknowledge immediately"}
             check(c.clicks==0){"First tap must wait for drag classification"}
             SystemClock.sleep(80);send(MotionEvent.ACTION_DOWN,200f,400f,false)
             send(MotionEvent.ACTION_MOVE,230f,440f,false)
             check(c.clicks==0&&c.down==1&&c.up==0&&c.moves.sumOf{it.second}==40){"Second-tap slide did not drag"}
             send(MotionEvent.ACTION_CANCEL,230f,440f,false)
             check(c.up==1){"Cancelled drag did not release"}
+            check(c.haptics==2){"Drag must acknowledge once on entry"}
         }
         scenario{_,c,send->
             send(MotionEvent.ACTION_DOWN,200f,400f,false)
             SystemClock.sleep(50);send(MotionEvent.ACTION_UP,200f,400f,false)
             SystemClock.sleep(80);send(MotionEvent.ACTION_DOWN,200f,400f,false)
             SystemClock.sleep(50);send(MotionEvent.ACTION_UP,200f,400f,false)
+            check(c.haptics==2){"Double tap must acknowledge each tap exactly once"}
             check(c.clicks==2&&c.down==0&&c.up==0){"Quick double tap must emit two complete clicks"}
         }
         for(direct in listOf(true,false))scenario{listener,c,send->
@@ -286,6 +307,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
             send(MotionEvent.ACTION_MOVE,100f,200f,direct)
             send(MotionEvent.ACTION_UP,100f,200f,direct)
             check(c.wheel.sumOf{it.first}==10){"Upward wheel gesture must scroll up: ${c.wheel}"}
+            check(c.haptics==0){"Scrolling must not vibrate continuously"}
             check(c.down==0&&c.clicks==0&&c.moves.isEmpty()){ "Wheel gesture leaked mouse events" }
         }
     }

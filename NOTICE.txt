@@ -12,5 +12,3 @@ See the accompanying LICENSE file and the preserved upstream README.
 MambaPad modifications (2026): USB transport, Windows receiver, gesture
 state management, permission flow, original interface and icon assets.
 Upstream copyright and license notices are retained in source files.
-
-No endorsement by the upstream authors or any beverage brand is implied.

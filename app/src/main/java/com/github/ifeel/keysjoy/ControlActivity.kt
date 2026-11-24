@@ -24,6 +24,8 @@ import com.github.ifeel.keysjoy.listeners.ViewListener
 import com.github.ifeel.keysjoy.senders.BluetoothInputSender
 import com.github.ifeel.keysjoy.senders.UsbMouseSender
 import com.github.ifeel.keysjoy.transport.AdbSocketTransport
+import com.github.ifeel.keysjoy.ui.TouchFeedback
+import android.widget.CheckBox
 import com.github.ifeel.keysjoy.ui.ControlScreen
 import com.github.ifeel.keysjoy.ui.MambaUi
 import com.github.ifeel.keysjoy.ui.MambaUi.dp
@@ -137,7 +139,7 @@ open class ControlActivity : Activity() {
         fun button(view:View,name:String) {
             view.setOnTouchListener{v,event->
                 when(event.actionMasked) {
-                    MotionEvent.ACTION_DOWN->if(connected){held.add(name);listener?.setButtonHeld(true);button(name,true);v.isPressed=true}
+                    MotionEvent.ACTION_DOWN->if(connected){TouchFeedback.perform(v);held.add(name);listener?.setButtonHeld(true);button(name,true);v.isPressed=true}
                     MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{held.remove(name);button(name,false);listener?.setButtonHeld(held.isNotEmpty());v.isPressed=false;if(event.actionMasked==MotionEvent.ACTION_UP)v.performClick()}
                 };true
             }
@@ -197,6 +199,10 @@ open class ControlActivity : Activity() {
     private fun settings() {
         val body=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(10),dp(20),dp(10))}
         val label=MambaUi.text(this,"指针速度 ${speed+1}/6",14f)
+        body.addView(CheckBox(this).apply {
+            text="触觉反馈";isChecked=TouchFeedback.enabled(this@ControlActivity)
+            setOnCheckedChangeListener { _,enabled -> TouchFeedback.setEnabled(this@ControlActivity,enabled) }
+        })
         body.addView(label)
         body.addView(SeekBar(this).apply{
             max=5;progress=speed

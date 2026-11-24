@@ -6,14 +6,13 @@ import android.bluetooth.BluetoothHidDevice
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewConfiguration
+import com.github.ifeel.keysjoy.ui.TouchFeedback
 import com.github.ifeel.keysjoy.input.TapDragState
 import androidx.core.view.GestureDetectorCompat
 import com.github.ifeel.keysjoy.senders.RelativeMouseSender
@@ -79,12 +78,14 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
         dragPointer.clear()
         gestureDetector = null
         scaleDetector = null
+        touchView = null
         rMouseSender.releaseAll()
     }
 
     // ==================== Haptics ====================
 
-    private var vibrator: Vibrator? = null
+    var onHaptic: (View) -> Unit = { TouchFeedback.perform(it) }
+    private var touchView: View? = null
 
     // ==================== State ====================
 
@@ -191,9 +192,9 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     override fun onTouch(v: View?, event: MotionEvent?): Boolean {
         if (event == null || v == null) return false
 
+        touchView = v
         // Lazy-init detectors
         if (gestureDetector == null) {
-            vibrator = v.context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             gestureDetector = GestureDetectorCompat(v.context, GestureListener()).apply { setIsLongpressEnabled(false) }
         }
         if (scaleDetector == null) {
@@ -280,7 +281,7 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
                     val slop=ViewConfiguration.get(v.context).scaledTouchSlop
                     if(dx*dx+dy*dy>slop*slop) {
                         emit(taps.startDrag())
-                        vibrator?.vibrate(VibrationEffect.createOneShot(30,VibrationEffect.DEFAULT_AMPLITUDE))
+                        onHaptic(v)
                     }
                 }
                 // Preserve the initial baseline until drag classification completes.
@@ -312,6 +313,7 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
                     ).toFloat()
                     if (fingerDistance > 30f) {
                         Log.i("ViewListener", "Two-finger right click (POINTER_UP)")
+                        onHaptic(v)
                         rMouseSender.sendRightClick()
                         rightClickSent = true
                     }
@@ -326,7 +328,10 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
                 if(event.actionMasked==MotionEvent.ACTION_CANCEL) {
                     tapHandler.removeCallbacks(confirmTap)
                     emit(taps.cancel())
-                } else emit(taps.secondUp())
+                } else {
+                    if(taps.secondPressed && !taps.dragging) onHaptic(v)
+                    emit(taps.secondUp())
+                }
                 // Keep tap-suppression flags until GestureDetector consumes this UP.
                 resetAccumulators()
                 dragPointer.clear()
@@ -450,11 +455,13 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
             // e.pointerCount which may report stale values from the event.
             if (activePointerCount >= 2) {
                 Log.i("ViewListener", "Two-finger tap → right click")
+                touchView?.let(onHaptic)
                 rMouseSender.sendRightClick()
                 return true
             }
 
             // Shell needs an ordinary DOWN for dragging, not a double-click DOWN.
+            touchView?.let(onHaptic)
             emit(taps.firstTap())
             tapHandler.removeCallbacks(confirmTap)
             tapHandler.postDelayed(confirmTap,ViewConfiguration.getDoubleTapTimeout().toLong())

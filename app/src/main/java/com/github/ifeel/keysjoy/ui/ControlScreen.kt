@@ -140,6 +140,7 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
                         contentDescription=key.label
                         isFocusable=false
                         setOnClickListener {
+                            if(pad.connected) TouchFeedback.perform(this,keyboard=true)
                             when {
                                 key.symbols -> symbolAction?.invoke()
                                 key.modifier!=0 -> {modifiers.toggle(key.modifier);updateModifierButtons()}

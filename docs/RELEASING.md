@@ -22,8 +22,9 @@
 在工作区的 dist/ 或 release/ 准备独立版本目录：
 
 - MambaPad-Android-VERSION.zip：APK、LICENSE、NOTICE.txt、使用说明。
-- MambaPad-Windows-x64-VERSION.zip：EXE、说明、LICENSE、NOTICE.txt、Go LICENSE、官方 ADB 工具及其原始 NOTICE/source.properties。
-- SHA256SUMS.txt：两个 ZIP 的 SHA256，最终打包后生成。
+- MambaPad-Windows-x64-VERSION-Portable.zip：EXE、portable.flag、adb-path.txt、说明、LICENSE、NOTICE.txt、Go LICENSE、版本子目录中的官方 ADB 工具及其原始 NOTICE/source.properties。
+- MambaPad-Windows-x64-VERSION-Setup.exe：按当前用户安装／卸载，同一接收端核心，不包含便携标记与运行数据。
+- SHA256SUMS.txt：Android ZIP、Windows 便携 ZIP 和安装 EXE 的 SHA256，最终打包后生成。
 - RELEASE_NOTES.md：更新、升级方法、兼容性、实际验证和已知限制；作为发布正文。
 
 ZIP 不含临时测试 APK、ADB 私钥、本机路径配置、设备日志或签名密钥。先检查 ZIP 文件列表、CRC 和许可文件。
@@ -32,9 +33,9 @@ ZIP 不含临时测试 APK、ADB 私钥、本机路径配置、设备日志或�
 
 1. 检查暂存差异，提交源码并推送；确认远程提交与本地一致。
 2. 使用明确的提交 SHA 创建预发布草稿，而不是依赖可能变动的 main。
-3. 上传 Android ZIP、Windows ZIP 和 SHA256SUMS.txt。
+3. 上传 Android ZIP、Windows 便携 ZIP、Windows 安装 EXE 和 SHA256SUMS.txt。
 4. 比对 GitHub 附件 digest/大小与本地文件，检查说明、目标提交和附件数量。
-5. 正式发布草稿，保留 prerelease 标记；只有用户决定正式发行后才使用正式发布策略。
+5. 正式发布草稿，预览版本保留 prerelease 标记且不设 Latest；GitHub 不允许预发布同时成为 Latest，只有用户决定正式发行后才使用正式发布策略。
 6. 确认公开 Release 不再为 draft，标签指向预期提交，下载附件完整。保留以前版本，不覆盖旧标签或旧附件。
 
 GitHub CLI 如需登录，让用户通过网页完成授权；认证信息只交给 CLI/系统凭据存储，不输出令牌或提交凭据目录。不为推送修改全局 Git 设置，可使用当前任务的凭据辅助配置。

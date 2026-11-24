@@ -62,21 +62,3 @@ Git 的 --ff-only 会在不能快进时拒绝合并，便于发现两台机器�
 MambaPad 现有 APK 使用本机 debug 密钥。换电脑或换 CI runner 自动生成的新 debug 密钥可能无法覆盖安装旧 APK。要先确定统一的测试签名或正式签名迁移方案，密钥做独立私密备份，不通过公开 Git 仓库同步，也不把 Base64 当加密。
 
 未来 CI 可使用 GitHub Actions Secrets 注入签名材料，但它不代替离线私密备份；先决定旧用户升级路径，再切换证书。[GitHub Secrets 文档](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
-
-## 从 Voicing 借鉴了什么
-
-研究日期：2026-11-24。参考提交 adf2a70ab258eaa93d1e20d713747dcca0cdebc7。
-
-| Voicing 的做法 | MambaPad 的取舍 |
-| --- | --- |
-| task_plan / progress / findings 分别记录任务、操作和决策 | 保留 ROADMAP + 一份简短 HANDOFF；长期技术取舍放架构文档，详细历史归档，避免每次读数千行日志 |
-| protocol JSON 与双端契约测试 | 后续建立 USB 共享协议契约与 Kotlin/Go 双端测试，先覆盖现有行为，不直接改变协议 |
-| Actions 编译、测试、签名、SHA256 与发布 | 借鉴固定工具链和产物校验；区分普通检查与发布，不让每次小修改自动触发对外 Release |
-| 开发重启脚本 | 后续封装针对本项目的启动/停止，按路径确认进程；不复制匹配宽泛的强制终止逻辑 |
-| .claude 中的工具配置 | 不复制别人的固定路径和权限白名单；通用规则保存在受版本控制的 AGENTS，机器授权各自管理 |
-
-Voicing 当前 tag 发布与手动触发的资产集合并不相同（手动路径不构建 Windows）。MambaPad 的发布应检查所需 Android/Windows 包是否齐全，不把“工作流成功”等同于所有平台都已产出。
-
-以上是模式研究与 MambaPad 方案，未运行 Voicing 脚本、未采用其本机权限设置；本仓 CI、初始化脚本和协议契约自动化尚未实现。
-
-参考：[贡献规范](https://github.com/kevinlasnh/Voicing/blob/main/CONTRIBUTING.md)、[任务记录](https://github.com/kevinlasnh/Voicing/blob/main/task_plan.md)、[发布工作流](https://github.com/kevinlasnh/Voicing/blob/main/.github/workflows/release.yml)、[协议契约](https://github.com/kevinlasnh/Voicing/blob/main/protocol/voicing_protocol_contract.json)。

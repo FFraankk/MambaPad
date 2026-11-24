@@ -101,7 +101,6 @@ object MambaUi {
             }
             card(R.id.home_usb,"USB 有线   →","插线即连 · 稳定低延迟",true,usb)
             card(R.id.home_bluetooth,"蓝牙无线   →","摆脱线缆 · 轻松切换",false,bluetooth)
-            choices.addView(text(activity,"无需账号  /  无需定位",12f,muted).apply{setPadding(0,dp(if(wide)0 else 18),0,0)})
             setContentView(scroll)
         }
     }

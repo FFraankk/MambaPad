@@ -51,12 +51,22 @@ func chooseDevice(output, serial string) (string, string) {
 }
 
 func manageADB(ctx context.Context, path, serial string) {
+	manageADBWithStatus(ctx, path, serial, nil)
+}
+
+func manageADBWithStatus(ctx context.Context, path, serial string, app *desktopApp) {
 	if path == "" {
 		exe, _ := os.Executable()
-		path = filepath.Join(filepath.Dir(exe), "tools", "adb", "adb.exe")
+		path = bundledADB(filepath.Dir(exe))
 	}
 	if _, err := os.Stat(path); err != nil {
-		log.Print("ADB missing: put platform-tools in tools/adb, or pass -adb PATH / 未找到 ADB")
+		log.Print("ADB executable missing")
+		if app != nil {
+			app.update(func(s *appSnapshot) {
+				s.Status = "未找到 ADB"
+				s.Detail = "请保留 EXE 同目录的 tools/adb 文件夹，或重新安装完整程序包。"
+			})
+		}
 		return
 	}
 	previous := ""
@@ -72,10 +82,11 @@ func manageADB(ctx context.Context, path, serial string) {
 		}
 	}()
 	for ctx.Err() == nil {
-		out, err := adbCommand(ctx, path, "devices")
+		out, err := adbCommand(ctx, path, "devices", "-l")
+		devices := deviceList(out)
 		device, status := chooseDevice(out, serial)
 		if err != nil {
-			status = "ADB error: " + out
+			status = "ADB 启动失败，请检查随包工具和 USB 驱动"
 			device = ""
 		}
 		if device != "" {
@@ -108,6 +119,16 @@ func manageADB(ctx context.Context, path, serial string) {
 			}
 		} else {
 			active = ""
+		}
+		if app != nil {
+			title, detail := connectionStatus(status)
+			app.update(func(s *appSnapshot) {
+				s.Devices = devices
+				s.Status = title
+				if !s.Connected {
+					s.Detail = detail
+				}
+			})
 		}
 		if status != previous {
 			log.Print(status)

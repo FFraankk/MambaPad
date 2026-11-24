@@ -6,15 +6,23 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
 	"os/signal"
-	"sync"
+	"runtime"
+	"syscall"
 	"time"
 )
 
-func serveSession(ctx context.Context, c net.Conn, injector Injector) error {
+func serveSession(ctx context.Context, c net.Conn, injector Injector, connection ...func(bool)) error {
+	notify := func(on bool) {
+		for _, fn := range connection {
+			fn(on)
+		}
+	}
+	defer notify(false)
 	defer c.Close()
 	state := newState(injector)
 	defer func() {
@@ -70,7 +78,8 @@ func serveSession(ctx context.Context, c net.Conn, injector Injector) error {
 				return err
 			}
 			handshaken = true
-			log.Print("Phone connected / 手机已连接")
+			notify(true)
+			log.Print("Phone connected")
 			continue
 		}
 		if m.Type == "hello" || m.Seq <= lastSeq {
@@ -88,55 +97,68 @@ func serveSession(ctx context.Context, c net.Conn, injector Injector) error {
 }
 
 func main() {
-	dry := flag.Bool("dry-run", false, "validate protocol without sending desktop input")
-	listenOnly := flag.Bool("listen-only", false, "do not run ADB or alter reverse mappings")
-	adb := flag.String("adb", "", "path to adb.exe (otherwise tools/adb/adb.exe beside this EXE)")
-	serial := flag.String("serial", "", "explicit ADB serial if multiple phones are connected")
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	dry := flag.Bool("dry-run", false, "validate without sending desktop input")
+	listenOnly := flag.Bool("listen-only", false, "do not run ADB or alter mappings")
+	adb := flag.String("adb", "", "path to adb.exe")
+	serial := flag.String("serial", "", "explicit USB device serial")
+	console := flag.Bool("console", false, "run without the desktop window")
+	quit := flag.Bool("quit", false, "gracefully stop the running desktop receiver")
 	flag.Parse()
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	finished := make(chan struct{})
-	defer close(finished)
-	installCloseHandler(cancel, finished)
-	listener, err := net.Listen("tcp4", "127.0.0.1:27183")
-	if err != nil {
-		log.Printf("Cannot listen: %v", err)
+	if *quit {
+		if err := stopExisting(); err != nil {
+			os.Exit(1)
+		}
 		return
 	}
-	defer listener.Close()
-	log.Print("MambaPad USB — no Root / 无需 Root。仅本机端口 27183。Ctrl+C 退出。")
-	if *dry {
-		log.Print("DRY RUN: desktop input disabled")
+	mutex, first, err := instanceMutex()
+	if err != nil {
+		showError("无法启动 MambaPad", err.Error())
+		return
 	}
-	var adbWorkers sync.WaitGroup
-	if !*listenOnly {
-		adbWorkers.Add(1)
-		go func() { defer adbWorkers.Done(); manageADB(ctx, *adb, *serial) }()
+	defer syscall.CloseHandle(mutex)
+	if !first {
+		showExisting()
+		return
 	}
-	go func() { <-ctx.Done(); listener.Close() }()
-	var sessions sync.WaitGroup
-	busy := make(chan struct{}, 1)
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			break
-		}
-		select {
-		case busy <- struct{}{}:
-			sessions.Add(1)
-			go func() {
-				defer sessions.Done()
-				defer func() { <-busy }()
-				if err := serveSession(ctx, conn, WindowsInjector{*dry}); err != nil {
-					log.Printf("Session closed: %v", err)
-				}
-				log.Print("Disconnected / 已断开")
-			}()
-		default:
-			conn.Close()
-		}
+	defer releaseInstance(mutex)
+	exe, err := os.Executable()
+	if err != nil {
+		showError("无法启动 MambaPad", err.Error())
+		return
 	}
-	sessions.Wait()
-	cancel()
-	adbWorkers.Wait()
+	app, err := newDesktopApp(exe)
+	if err != nil {
+		showError("无法保存设置", "请将便携版解压到可写目录。\n"+err.Error())
+		return
+	}
+	logger, err := openLog(app.dataDir)
+	if err != nil {
+		showError("无法打开日志", err.Error())
+		return
+	}
+	defer logger.Close()
+	log.SetOutput(logger)
+	if *console {
+		log.SetOutput(io.MultiWriter(logger, os.Stderr))
+	}
+	if *serial == "" {
+		*serial = app.prefs.Serial
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	app.cancel = cancel
+	finished := app.done
+	installCloseHandler(cancel, finished)
+	if *console {
+		go app.supervise(ctx, *adb, *serial, *dry, *listenOnly)
+		<-ctx.Done()
+		<-finished
+		return
+	}
+	if err = runDesktop(app, ctx, *adb, *serial, *dry, *listenOnly); err != nil {
+		cancel()
+		showError("MambaPad", err.Error())
+	}
 }

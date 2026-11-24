@@ -36,6 +36,14 @@ Go 接收端只依赖标准库；ADB 是随包的独立工具，启动、reverse
 
 ControlActivity 负责连接、暂停/销毁和返回；离开时取消手势、释放按键并结束会话，迟到的回调不能复活旧连接。
 
+## 触觉反馈与 Windows 桌面壳
+
+TouchFeedback 统一读取 control_ui 中的总开关，使用系统 View 触觉反馈并尊重系统设置。ViewListener 在轻点抬起、双击的第二次抬起及拖动成立时反馈；反馈不等待远端单击确认，不改变 DOWN/MOVE/UP 时序。左右键按下和共享键盘有效操作各反馈一次，系统输入法管理自身震动。
+
+Windows desktop_windows.go 在固定 OS 线程运行 Win32 消息循环、托盘和窗口；app.go 管理有锁状态、配置、有限日志及接收会话。后台状态更新通过窗口消息回到 UI 线程。设备切换先取消旧会话、释放按键并清理自有 reverse，再启动新会话。关闭／最小化窗口隐藏到托盘；退出等待接收与 ADB 清理，Explorer 重建任务栏后补回图标。
+
+便携版与安装版共用当前登录会话的命名互斥量；第二次启动恢复原窗口。portable.flag 决定数据目录，安装版使用当前用户 LOCALAPPDATA。packaging/windows 与 scripts/package-windows.ps1 生成两种包，安装器调用 -quit 正常结束已有接收端，不结束共享 ADB。
+
 ## 历史代码
 
 SelectDeviceActivity、部分 sender 和键盘布局来自旧 KeysJoy 页面。当前首页走共享控制页，旧文件仍可能被引用；删除前应检查调用、资源与蓝牙依赖。蓝牙真实配对兼容性尚未全面验证，不能把现有 UI 可用等同于无线功能已稳定。

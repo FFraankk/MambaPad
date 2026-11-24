@@ -20,10 +20,12 @@
 cd windows-receiver
 go test ./...
 go vet ./...
-go build -trimpath '-ldflags=-s -w' -o MambaPad.exe .
+go build -trimpath '-ldflags=-H=windowsgui -s -w' -o MambaPad.exe .
 ```
 
 `rsrc_windows_amd64.syso` 是已生成的 Windows 图标资源，原始图标在 `branding/mambapad.ico`。首个验证目标为 Windows x64，其他架构未完成测试。
+
+默认运行原生窗口与托盘。需要命令行调试时可构建不带 `-H=windowsgui` 的 EXE 并加 `-console`；`-dry-run` 禁用真实电脑输入，`-listen-only` 不运行 ADB。`-quit` 请求正在运行的桌面实例正常清理并退出。
 
 ## 发布包
 
@@ -31,6 +33,18 @@ Android 包放 APK、LICENSE 和 NOTICE.txt。Windows 包放 EXE、使用说明�
 
 本仓库不包含 SDK、ADB 工具本体、Gradle 缓存、签名密钥或设备调试授权文件。构建脚本不会代替你安装系统工具。正式版本发布前应自行管理发布签名；现有预览 APK 以 debug 密钥签名。
 
+
+## Windows 两种发行包
+
+使用 Inno Setup 6.7.4 的 ISCC 编译安装包；编译器放在工作区工具目录，脚本不会安装它或修改系统 PATH。准备官方 ADB 工具和 Go LICENSE 后运行：
+
+```powershell
+.\scripts\package-windows.ps1 -GoExe 'go' -AdbDirectory '<ADB 目录>' -GoLicense '<Go LICENSE 文件>' -ISCC '<ISCC.exe>'
+```
+
+脚本先执行 Go test/vet，再生成 dist/windows-VERSION 下的便携 ZIP、安装 EXE 和 SHA256SUMS.txt。输出目录已存在时拒绝覆盖。安装包不含 portable.flag 或运行数据；便携包包含 portable.flag，运行数据写入旁边的 data。安装版数据写入当前用户 LOCALAPPDATA/MambaPad，卸载保留设置与有限日志。ADB 以不可变版本子目录分发，由 adb-path.txt 指定；不要单独移动 EXE 或删除该文件。
+
+安装、升级和卸载测试会添加或移除当前用户的卸载注册项与开始菜单入口，应先取得相应授权。不得为了测试更改安全开关或结束共享 ADB。
 
 ## 本工作区工具与缓存
 

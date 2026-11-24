@@ -72,6 +72,9 @@ Design the software for its end users, not for the conversation between the deve
 7. 输入法 composing 只留在手机，commit 后再传输。USB 可发 Unicode；蓝牙 HID 不能直接发任意汉字，不声称两种文字通道完全相同。
 8. USB 只监听 Windows loopback，不擅自改成 LAN。事件不跨重连回放，队列溢出不能丢弃释放事件后继续运行。
 
+9. 触觉反馈独立于远端输入时序，尊重系统设置与应用总开关；普通移动／滚动不持续震动，不给系统输入法重复添加反馈。
+10. Windows 默认窗口与托盘运行；关闭窗口保留连接，“退出”才清理会话。便携／安装版共用单实例，不以强制终止共享 ADB 完成升级或卸载。
+
 ## 验证与交付
 
 - 按修改范围选择验证，命令见 BUILDING.md / CONTRIBUTING.md。文档修改检查链接和 diff 即可，不为凑数跑全套设备测试。
