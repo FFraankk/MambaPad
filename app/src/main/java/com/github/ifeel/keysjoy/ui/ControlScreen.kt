@@ -5,7 +5,10 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import android.widget.*
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.github.ifeel.keysjoy.R
 import com.github.ifeel.keysjoy.input.KeyboardModifiers
 import com.github.ifeel.keysjoy.ui.MambaUi.dp
@@ -17,6 +20,7 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
     val layout = MambaUi.button(activity, if (keyboard) "纯触控" else "键盘")
     val rotate = MambaUi.button(activity, "横屏")
     val settings = MambaUi.button(activity, "设置")
+    val systemIme = MambaUi.button(activity, "系统输入法")
     val connect = MambaUi.button(activity, if (bluetooth) "连接设备" else "重新连接")
     val status = MambaUi.text(activity, "未连接", 11f, MambaUi.muted)
     val pad = TouchpadSurface(activity)
@@ -29,11 +33,19 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
     var editor: RemoteImeEditor? = null
         private set
     var onText: (Int, String) -> Unit = { _, _ -> }
+    var onImeModeChanged: () -> Unit = {}
+    private val wide = activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val autoShowKeyboard = keyboard && !wide
+    private var landscapeIme = false
+    private var imeWasVisible = false
+    private var imeHostActive = true
+    private var splitPanels = emptyList<View>()
+    private var inputRow: View? = null
+    private var arrangeLandscapeIme: (Boolean) -> Unit = {}
     private var symbols = false
 
     init {
         with(activity) {
-            val wide = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             root.orientation = LinearLayout.VERTICAL
             root.id = R.id.control_root
             root.tag = if(keyboard) "keyboard" else "touchpad"
@@ -47,11 +59,15 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
             status.id = R.id.usb_status
             titleBox.addView(status.apply { setPadding(0,dp(2),0,0) })
             header.addView(titleBox, LinearLayout.LayoutParams(0,-2,1f))
-            for ((button, width) in listOf(layout to 66, rotate to 50, settings to 50)) {
+            val headerActions = if(wide && keyboard) listOf(systemIme to 88, layout to 66, rotate to 50, settings to 50)
+                else listOf(layout to 66, rotate to 50, settings to 50)
+            for ((button, width) in headerActions) {
                 button.textSize = 12f; button.setPadding(0,0,0,0)
                 header.addView(button, LinearLayout.LayoutParams(dp(width),dp(38)).apply { marginStart=dp(5) })
             }
             layout.id = R.id.control_layout
+            systemIme.id = R.id.control_system_ime
+            systemIme.setOnClickListener { if(landscapeIme) hideSystemIme() else showSystemIme() }
             rotate.id = R.id.control_rotate
             rotate.text = if (wide) "竖屏" else "横屏"
             root.addView(header, LinearLayout.LayoutParams(-1,dp(46)))
@@ -77,10 +93,37 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
             touchBlock.addView(mouseRow)
             if (wide && keyboard) {
                 val body=LinearLayout(activity)
-                body.addView(keyPanel(KeyLayouts.LEFT_PANEL.map { row -> row.filterNot { it.isSpecial }.map { uiKey(it) } }),LinearLayout.LayoutParams(0,-1,0.25f))
+                val leftPanel=keyPanel(KeyLayouts.LEFT_PANEL.map { row -> row.filterNot { it.isSpecial }.map { uiKey(it) } }).apply { id=R.id.control_left_panel }
+                val rightPanel=keyPanel(KeyLayouts.RIGHT_PANEL.map { row -> row.filterNot { it.isSpecial }.map { uiKey(it) } }).apply { id=R.id.control_right_panel }
+                splitPanels=listOf(leftPanel,rightPanel)
+                body.addView(leftPanel,LinearLayout.LayoutParams(0,-1,0.25f))
                 body.addView(touchBlock,LinearLayout.LayoutParams(0,-1,0.50f).apply {marginStart=dp(6);marginEnd=dp(6)})
-                body.addView(keyPanel(KeyLayouts.RIGHT_PANEL.map { row -> row.filterNot { it.isSpecial }.map { uiKey(it) } }),LinearLayout.LayoutParams(0,-1,0.25f))
+                body.addView(rightPanel,LinearLayout.LayoutParams(0,-1,0.25f))
                 root.addView(body,LinearLayout.LayoutParams(-1,0,1f))
+                inputRow=createInputRow().apply { visibility=View.GONE }
+                root.addView(inputRow,LinearLayout.LayoutParams(-1,dp(36)))
+                // Some landscape IMEs leave only ~100dp for the entire app.
+                // Use the remaining height for the pad and place mouse buttons
+                // beside it, instead of stacking three rows above the IME.
+                arrangeLandscapeIme={active ->
+                    header.visibility=if(active)View.GONE else View.VISIBLE
+                    touchBlock.orientation=if(active)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+                    pad.layoutParams=if(active)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,0,1f)
+                    mouseRow.layoutParams=if(active)LinearLayout.LayoutParams(dp(180),-1) else LinearLayout.LayoutParams(-1,-2)
+                    mouseRow.setPadding(if(active)dp(6) else 0,if(active)0 else dp(5),0,0)
+                    for(i in 0 until mouseRow.childCount) {
+                        val child=mouseRow.getChildAt(i)
+                        child.layoutParams=child.layoutParams.apply { height=if(active)-1 else dp(38) }
+                    }
+                }
+                root.isFocusableInTouchMode=true
+                root.viewTreeObserver.addOnGlobalLayoutListener {
+                    val visible=ViewCompat.getRootWindowInsets(root)?.isVisible(WindowInsetsCompat.Type.ime())==true
+                    // A voice-input activity may temporarily own focus while hiding
+                    // the IME. Keep its editor available for the returned commit.
+                    if(landscapeIme && imeWasVisible && !visible && imeHostActive) hideSystemIme()
+                    imeWasVisible=visible
+                }
             } else {
                 root.addView(touchBlock,LinearLayout.LayoutParams(-1,0,1f))
                 if (keyboard) {
@@ -89,23 +132,59 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
                     val row=keyPanel(listOf(keys),fixedKeyWidth=56)
                     tools.addView(row,android.widget.FrameLayout.LayoutParams(-2,-1))
                     root.addView(tools,LinearLayout.LayoutParams(-1,dp(42)))
-                    val input=RemoteImeEditor(activity).apply {
-                        id=R.id.control_ime
-                        setPadding(dp(10),0,dp(10),0)
-                        background=MambaUi.shape(Color.WHITE,dp(7).toFloat(),MambaUi.line)
-                        onEdit={count,text->onText(count,text)}
-                    }
-                    editor=input
-                    val inputRow=LinearLayout(activity)
-                    inputRow.addView(input,LinearLayout.LayoutParams(0,dp(36),1f))
-                    inputRow.addView(MambaUi.button(activity,"收起").apply {
-                        textSize=11f;setPadding(0,0,0,0);setOnClickListener{input.hideKeyboard()}
-                    },LinearLayout.LayoutParams(dp(52),dp(36)))
-                    root.addView(inputRow,LinearLayout.LayoutParams(-1,dp(36)))
-
+                    root.addView(createInputRow(),LinearLayout.LayoutParams(-1,dp(36)))
                 }
             }
         }
+    }
+
+    private fun createInputRow(): LinearLayout {
+        val input=RemoteImeEditor(activity).apply {
+            id=R.id.control_ime
+            setPadding(activity.dp(10),0,activity.dp(10),0)
+            background=MambaUi.shape(Color.WHITE,activity.dp(7).toFloat(),MambaUi.line)
+            onEdit={count,text->onText(count,text)}
+        }
+        editor=input
+        return LinearLayout(activity).apply {
+            addView(input,LinearLayout.LayoutParams(0,activity.dp(36),1f))
+            addView(MambaUi.button(activity,"收起").apply {
+                id=R.id.control_ime_hide
+                textSize=11f;setPadding(0,0,0,0)
+                setOnClickListener { if(!hideSystemIme()) input.hideKeyboard() }
+            },LinearLayout.LayoutParams(activity.dp(52),activity.dp(36)))
+        }
+    }
+
+    private fun showSystemIme() {
+        if(!wide || !keyboard)return
+        landscapeIme=true
+        activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED)
+        imeWasVisible=false
+        splitPanels.forEach { it.visibility=View.GONE }
+        inputRow?.visibility=View.VISIBLE
+        arrangeLandscapeIme(true)
+        systemIme.isSelected=true
+        onImeModeChanged()
+        editor?.showKeyboard()
+    }
+
+    fun hostResumed(active: Boolean) { imeHostActive=active }
+
+    /** Returns true when Back/close was handled by the temporary landscape mode. */
+    fun hideSystemIme(): Boolean {
+        if(!landscapeIme)return false
+        landscapeIme=false
+        activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+        editor?.hideKeyboard()
+        editor?.clearFocus()
+        inputRow?.visibility=View.GONE
+        arrangeLandscapeIme(false)
+        splitPanels.forEach { it.visibility=View.VISIBLE }
+        systemIme.isSelected=false
+        root.requestFocus()
+        onImeModeChanged()
+        return true
     }
 
     fun connection(connected: Boolean, detail: String = "") {
