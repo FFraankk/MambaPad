@@ -47,9 +47,17 @@ GitHub CLI 如需登录，让用户通过网页完成授权；认证信息只交
 ## GitHub Actions 自动发布
 
 - `CI`：main push 和所有 PR 检查 Android 构建/JVM 单测、Windows Go test/vet/build，不使用签名 Secrets、不发布。
-- `Release` → Run workflow（main）：使用统一预览签名编译、打包、校验证书及版本，汇总四个发行包与校验清单到 `verified-release` artifact，保留 7 天；不创建或更新 Release。
+- `Release` → Run workflow（main）：使用统一预览签名编译、打包、校验证书及版本，在最终阶段汇总四个发行包与校验清单到 `verified-release` artifact，保留 7 天；不创建或更新 Release。
 - 推送新标签 `vVERSION`：标签必须等于 app/build.gradle 的 versionName。全部构建/单测/打包通过后，创建草稿、上传五项附件、比对远程大小与 SHA256，再公开发布。已有同名 Release 时拒绝覆盖；失败草稿保留以便检查，不自动删除或替换。
 - 名称含连字符的版本（如 `v1.3.1-preview`）自动预发布且不设 Latest；无预览后缀的正式版本标签会正式发布并设 Latest。因此仅在用户已决定正式发行时推送正式标签。现有 `v1.3.0-preview` 和附件保持原样。
+
+工作流只有三个阶段：
+
+1. metadata：核对版本信息。
+2. android / windows：并行构建、测试、签名校验与打包，各上传一次中转产物（保留 1 天）。
+3. publish：一次下载并合并中转产物，检查包完整性和生成 SHA256；标签触发时直接发布，手动触发时仅保存 verified-release（保留 7 天）。
+
+不再单独运行 assemble job，也不在标签发布时上传、重新下载完整汇总包。签名备份不属于流水线步骤，不会每次构建重新创建。
 
 工作流固定 Actions 提交 SHA、JDK 21、Go 1.27.4、SDK Platform/Build Tools 35，以及按 SHA256 验证的 ADB 37.0.3、Inno Setup 6.7.4 和解包工具。编译器在临时目录解包，不执行安装器。只有最终 publish job 具有 contents:write；普通 PR 不接触发布密钥。
 
@@ -68,3 +76,5 @@ python scripts/signing-backup.py restore <加密备份.enc> --keystore <新密�
 ```
 
 创建时可交互输入别名和密钥口令，或通过当前进程的 MAMBAPAD_KEY_ALIAS / MAMBAPAD_STORE_PASSWORD / MAMBAPAD_KEY_PASSWORD 注入。备份采用 scrypt 与 AES-256-GCM，包含密钥及其别名、口令；恢复口令单独生成。将加密备份与恢复口令分别转存到独立的离线介质或密码管理器；同盘两个目录不构成灾难恢复备份。恢复产生的凭据 JSON 属于秘密，使用后妥善处理，不加入 Git。GitHub Secrets 无法代替离线备份。
+
+备份保持最小集合：日常构建使用原密钥，灾难恢复只需一份加密备份和其恢复口令。构建缓存、临时验证包、Actions 中转产物与发布附件均不是签名备份，可以独立清理。恢复前后应核对可信证书指纹；新电脑普通调试构建不需要恢复备份，步骤见 [BUILDING.md](../BUILDING.md)。

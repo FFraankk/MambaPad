@@ -57,7 +57,7 @@ jobs:
           name: release-android
           path: dist/android/*
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
   windows:
     needs: metadata
     runs-on: windows-2025
@@ -84,30 +84,10 @@ jobs:
             dist/windows-${{ needs.metadata.outputs.version }}/*-Portable.zip
             dist/windows-${{ needs.metadata.outputs.version }}/*-Setup.exe
           if-no-files-found: error
-          retention-days: 7
-  assemble:
-    needs: [android, windows]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: release-*
-          merge-multiple: true
-          path: dist/release
-      - run: python3 scripts/ci-release.py manifest
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: verified-release
-          path: dist/release/*
-          if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
   publish:
-    needs: assemble
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    name: Assemble and publish
+    needs: [android, windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -118,9 +98,21 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: verified-release
+          pattern: release-*
+          merge-multiple: true
           path: dist/release
+      - name: Verify packages and generate checksums
+        run: python3 scripts/ci-release.py manifest
+      - name: Save manual validation packages
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-release
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 7
       - name: Verify remote draft assets, then publish
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/ci-release.py publish

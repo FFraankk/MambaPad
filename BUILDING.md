@@ -1,31 +1,44 @@
 # 构建 MambaPad
 
-## Android
+## 在另一台电脑编译运行
 
-需要 JDK 17 或更新版本、Android SDK Platform 35 和相应 Build Tools。设置 `ANDROID_HOME` 或本地 `local.properties` 的 `sdk.dir`；本地路径文件不要提交。
+源码包含 Gradle Wrapper 和 Windows 图标资源，不依赖本机工具目录或任何签名备份。首次构建需要联网下载依赖；下载源码 ZIP 后先完整解压，或使用 Git clone。
+
+| 目标 | 准备环境 | 签名要求 |
+| --- | --- | --- |
+| Android 调试 APK | JDK 21、Android SDK Platform 35 / Build Tools 35.0.0 | 不需要项目密钥，Gradle 自动生成本机 debug 签名 |
+| Windows 接收端 EXE | Windows x64、Go 1.25+（CI 使用 1.27.4） | 不需要签名证书；连接手机还需官方 ADB |
+| Android 覆盖现有预览版 | 上述 Android 环境，另加原签名密钥 | 或直接下载本仓库 Release / 手动 Release 工作流生成的同签名 APK |
+| 完整 Windows 发行包 | Windows 构建环境、ADB、Inno Setup 6.7.4 | 按下文打包；普通编译 EXE 不需要 Inno Setup |
+
+### Android：先生成可运行的调试包
+
+设置当前终端的 JAVA_HOME 与 ANDROID_HOME，指向自己的 JDK 和 SDK；也可在未跟踪的 local.properties 中设置 sdk.dir。准备好 Platform 35、Build Tools 35.0.0 后，在源码根目录执行：
 
 ```powershell
 .\gradlew.bat --no-daemon '-Pkotlin.compiler.execution.strategy=in-process' assembleDebug testDebugUnitTest
 ```
 
-输出：`app/build/outputs/apk/debug/app-debug.apk`。macOS/Linux 可使用 `sh ./gradlew`。首次构建需要联网获取 Gradle 与依赖。Gradle Wrapper、AGP 与 Kotlin 版本已在项目中声明。
+APK 位于 app/build/outputs/apk/debug/app-debug.apk。macOS/Linux 使用 `sh ./gradlew`。普通调试无需 GitHub 登录、仓库 Secrets、Python 或加密备份。不要把发布环境的 MAMBAPAD_REQUIRE_SIGNING=true 或部分签名变量带入普通调试终端。
 
-`lintDebug` 当前仍有 41 个旧代码静态检查错误；构建与 JVM 单测可以独立运行。设备测试 runner 位于 `app/src/androidTest`，需要 Android 真机及临时测试 APK，执行时会进行应用旋转和触控手势。
+如果手机已安装本项目的预览版，新电脑生成的默认签名通常不同，无法直接覆盖它。需要保留应用数据时，从本仓库 Releases 或 main 的手动 Release 工作流下载同签名产物；要在本地修改后覆盖，才需恢复原密钥并设置下文的四项签名变量。不要通过卸载现有应用来掩盖签名问题。
 
-## Windows 接收端
+### Windows：编译后指定 ADB
 
-需要 Windows x64 与 Go 1.25 或更新版本；只使用 Go 标准库。
+在 Windows 源码根目录执行（Go 在当前终端可用）：
 
 ```powershell
-cd windows-receiver
+Set-Location windows-receiver
 go test ./...
 go vet ./...
 go build -trimpath '-ldflags=-H=windowsgui -s -w' -o MambaPad.exe .
+.\MambaPad.exe -adb '<官方 Platform Tools 目录>\adb.exe'
 ```
 
-`rsrc_windows_amd64.syso` 是已生成的 Windows 图标资源，原始图标在 `branding/mambapad.ico`。首个验证目标为 Windows x64，其他架构未完成测试。
+请保留官方 Platform Tools 的配套 DLL 与 adb.exe，不能只复制一个 adb.exe。自编译 EXE 不会自动附带 ADB；正式便携 ZIP 和安装包才已内置它。连接手机仍需 USB 调试授权，个别电脑需要手机厂商驱动。macOS/Linux 可以构建 Android APK，但此 Windows 接收端须在 Windows 上运行，其他桌面平台尚无对应接收端。
 
-默认运行原生窗口与托盘。需要命令行调试时可构建不带 `-H=windowsgui` 的 EXE 并加 `-console`；`-dry-run` 禁用真实电脑输入，`-listen-only` 不运行 ADB。`-quit` 请求正在运行的桌面实例正常清理并退出。
+
+Windows 图标资源已包含在源码中；更改图标时才需重新生成。调试命令可选 -console、-dry-run、-listen-only；-quit 请求正在运行的桌面实例正常退出。
 
 ## 发布包
 
