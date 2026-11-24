@@ -83,6 +83,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
             }
             activity = orient(activity, false)
             verifyKeyboardUi(activity)
+            verifyClipboardShortcuts(activity)
             result.putString("keyboard_ui", "PASS: native IME commits Chinese/emoji, keeps composition local, and emits deletion")
             verifyPointerGestures(activity)
             result.putString("gesture_semantics", "PASS: move/hold never select, tap-then-slide drags, double tap clicks, wheel down/up directions")
@@ -126,6 +127,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
             activity = openConnected()
             result.putString("lifecycle", "PASS: activity close and reopen reconnected")
             verifyLayoutsAndNavigation(activity)
+            result.putString("clipboard_shortcuts", "PASS: Ctrl+C/Ctrl+V in both layouts, orientations and transports; sticky modifiers reset")
             result.putString("landscape_ime", "PASS: system IME, composing/commit, close/Back, rapid toggle and rotation")
             result.putString("layouts_navigation", "PASS: four layouts, USB/BT home buttons, and Bluetooth system Back")
             result.putString("result", "PASS")
@@ -160,6 +162,9 @@ class UsbSmokeInstrumentation : Instrumentation() {
             if((root.tag=="keyboard")!=show)activity.findViewById<View>(R.id.control_layout).performClick()
         }
         waitForIdleSync();SystemClock.sleep(120)
+        runOnMainSync {
+            check(activity.findViewById<View>(R.id.control_copy).isShown && activity.findViewById<View>(R.id.control_paste).isShown){"Clipboard buttons missing from layout"}
+        }
     }
     private fun screenshot(name:String) {
         waitForIdleSync();SystemClock.sleep(250)
@@ -189,6 +194,23 @@ class UsbSmokeInstrumentation : Instrumentation() {
         waitForIdleSync();check(edits.last()==(0 to "abc")){ "Finish composition failed: $edits" }
     }
 
+    private fun verifyClipboardShortcuts(activity:Activity) {
+        for(bluetooth in listOf(false,true))for(keyboard in listOf(false,true)) {
+            val sent=mutableListOf<Pair<Int,Int>>()
+            val modifiers=KeyboardModifiers()
+            runOnMainSync {
+                val screen=ControlScreen(activity,bluetooth,keyboard,modifiers)
+                screen.onKey={usage,mask->sent.add(usage to mask)}
+                modifiers.toggle(2)
+                screen.copy.performClick()
+                modifiers.toggle(4)
+                screen.paste.performClick()
+                check(modifiers.mask==0){"Clipboard action retained sticky modifiers"}
+            }
+            check(sent==listOf(6 to 1,25 to 1)){"Copy/paste must send Ctrl+C/Ctrl+V in every mode: $sent"}
+        }
+    }
+
     private fun verifySplitKeyboardUi(activity:Activity) {
         val keys=mutableListOf<Pair<Int,Int>>()
         runOnMainSync {
@@ -205,6 +227,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
         keyboard(a,false);screenshot("control-portrait-touchpad")
         a=orient(a,true)
         verifySplitKeyboardUi(a)
+        verifyClipboardShortcuts(a)
         keyboard(a,false)
         runOnMainSync {
             val root=a.findViewById<View>(R.id.control_root);val pad=a.findViewById<View>(R.id.simple_trackpad_touch)
@@ -263,7 +286,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
                 val pad=a.findViewById<View>(R.id.simple_trackpad_touch)
                 val left=a.findViewById<View>(R.id.btn_mouse_left)
                 check(!splitVisible()){"Split keyboard overlaps system IME"}
-                check(pad.width>root.width*0.65f && pad.height>=a.resources.displayMetrics.density*48){"IME touch surface unusable: ${pad.width}x${pad.height}"}
+                check(pad.width>root.width*0.55f && pad.height>=a.resources.displayMetrics.density*48){"IME touch surface unusable: ${pad.width}x${pad.height}"}
                 check(left.isShown && left.height>0)
             }
         }

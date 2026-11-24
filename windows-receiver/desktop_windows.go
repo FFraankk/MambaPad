@@ -123,6 +123,7 @@ type desktopWindow struct {
 	devices                                 []usbDevice
 	closing                                 bool
 	dpi                                     int
+	theme                                   *desktopTheme
 }
 
 var desktop *desktopWindow
@@ -195,6 +196,9 @@ func (w *desktopWindow) refresh() {
 	}
 	proc("SetWindowTextW", w.status, uintptr(unsafe.Pointer(utf(status))))
 	detail := s.Detail
+	if detail == "" {
+		detail = "用数据线连接手机，授权后即可开始。"
+	}
 	if s.Connected {
 		w.app.mu.Lock()
 		serial := w.app.prefs.Serial
@@ -240,6 +244,7 @@ func (w *desktopWindow) refresh() {
 	if w.tray {
 		w.notice(1, false)
 	}
+	proc("InvalidateRect", w.hwnd, 0, 0)
 }
 func (w *desktopWindow) requestQuit() {
 	if w.closing {
@@ -282,6 +287,23 @@ func windowProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		return 0
 	}
 	switch msg {
+	case 0xf: // WM_PAINT
+		w.paint()
+		return 0
+	case 0x14: // WM_ERASEBKGND; paint the complete background in WM_PAINT.
+		return 1
+	case 0x138, 0x133, 0x134: // Static/read-only text, edit, dropdown list.
+		return w.colorControl(wp, lp)
+	case 0x2b: // WM_DRAWITEM
+		if lp != 0 {
+			// Copy the Win32-owned payload while the callback is active.
+			var item drawItemData
+			kernel32.NewProc("RtlMoveMemory").Call(uintptr(unsafe.Pointer(&item)), lp, unsafe.Sizeof(item))
+			if item.Type == 4 {
+				w.drawButton(&item)
+				return 1
+			}
+		}
 	case 0x10:
 		w.hide()
 		return 0 // close keeps USB running
@@ -373,42 +395,54 @@ func runDesktop(a *desktopApp, ctx context.Context, adb, serial string, dry, lis
 		dpi = 96
 	}
 	module, _, _ := kernel32.NewProc("GetModuleHandleW").Call(0)
-	icon := proc("LoadImageW", module, 1, 1, 0, 0, 0x40)
+	icon := proc("LoadImageW", module, 1, 1, uintptr(64*dpi/96), uintptr(64*dpi/96), 0x8000)
 	if icon == 0 {
 		icon = proc("LoadIconW", 0, 32512)
 	}
 	cursor := proc("LoadCursorW", 0, 32512)
-	wc := winClass{Callback: windowCallback, Instance: module, Icon: icon, SmallIcon: icon, Cursor: cursor, Background: 6, Name: utf(windowClass)}
+	theme := newDesktopTheme(dpi)
+	defer theme.close()
+	wc := winClass{Callback: windowCallback, Instance: module, Icon: icon, SmallIcon: icon, Cursor: cursor, Background: theme.brush(creamColor), Name: utf(windowClass)}
 	wc.Size = uint32(unsafe.Sizeof(wc))
 	if proc("RegisterClassExW", uintptr(unsafe.Pointer(&wc))) == 0 {
 		return fmt.Errorf("cannot register window")
 	}
-	w := &desktopWindow{app: a, icon: icon, dpi: dpi}
+	defer proc("UnregisterClassW", uintptr(unsafe.Pointer(utf(windowClass))), module)
+	w := &desktopWindow{app: a, icon: icon, dpi: dpi, font: theme.body, theme: theme}
 	desktop = w
 	defer func() { desktop = nil }()
 	w.taskbarCreated = uint32(proc("RegisterWindowMessageW", uintptr(unsafe.Pointer(utf("TaskbarCreated")))))
-	hwnd := proc("CreateWindowExW", 0, uintptr(unsafe.Pointer(utf(windowClass))), uintptr(unsafe.Pointer(utf("MambaPad"))), 0x00CA0000, 0x80000000, 0x80000000, w.scale(620), w.scale(465), 0, 0, module, 0)
+	const style = 0x02CA0000 // Fixed-size native window, clip child controls while painting.
+	bounds := w.rect(0, 0, 620, 540)
+	proc("AdjustWindowRectEx", uintptr(unsafe.Pointer(&bounds)), style, 0, 0)
+	hwnd := proc("CreateWindowExW", 0, uintptr(unsafe.Pointer(utf(windowClass))), uintptr(unsafe.Pointer(utf("MambaPad"))), style, 0x80000000, 0x80000000, uintptr(bounds.Right-bounds.Left), uintptr(bounds.Bottom-bounds.Top), 0, 0, module, 0)
 	if hwnd == 0 {
 		return fmt.Errorf("cannot create window")
 	}
 	w.hwnd = hwnd
-	font, _, _ := gdi32.NewProc("CreateFontW").Call(uintptr(int64(-15*dpi/96)), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 5, 0, uintptr(unsafe.Pointer(utf("Segoe UI"))))
-	w.font = font
-	defer gdi32.NewProc("DeleteObject").Call(font)
-	w.control("STATIC", "MambaPad · USB 接收端", 0, 24, 20, 560, 28, 0)
-	w.status = w.control("STATIC", "等待手机连接", 0, 24, 60, 560, 48, 0)
-	w.control("STATIC", "连接设备", 0, 24, 116, 90, 24, 0)
-	w.combo = w.control("COMBOBOX", "", 0x00200003|0x10000, 114, 112, 350, 200, 104)
-	w.control("BUTTON", "重新连接", 0x10000, 476, 112, 112, 30, 105)
-	guide := "1. 用数据线连接手机，开启 USB 调试并确认授权。\r\n2. 在手机 MambaPad 中进入 USB 有线。\r\n3. 最小化或关闭窗口后，连接会保留在托盘中。"
+	w.styleCaption()
+	w.label("MambaPad", theme.brand, 96, 20, 360, 38, inkColor, creamColor)
+	w.label("指尖一划，即刻掌控", theme.small, 96, 60, 350, 20, mutedColor, creamColor)
+	badge := w.control("STATIC", "USB 有线", 1, 500, 39, 86, 20, 0)
+	proc("SendMessageW", badge, 0x30, theme.small, 1)
+	theme.labels[badge] = labelColors{orangeColor, softColor}
+	w.status = w.label("等待手机连接", theme.status, 76, 112, 500, 36, inkColor, whiteColor)
+	w.detail = w.control("EDIT", "", 0x844, 44, 160, 532, 40, 0)
+	w.label("连接设备", theme.heading, 44, 248, 500, 24, inkColor, whiteColor)
+	w.combo = w.control("COMBOBOX", "", 0x00200003|0x10000, 44, 286, 370, 240, 104)
+	proc("SendMessageW", w.combo, 0x153, ^uintptr(0), w.scale(28)) // Selection field height.
+	proc("SendMessageW", w.combo, 0x153, 0, w.scale(28))
+	w.control("BUTTON", "重新连接", 0x1000b, 430, 284, 146, 36, 105)
+	w.label("开始使用", theme.heading, 44, 372, 500, 24, inkColor, whiteColor)
+	guide := "1. 用数据线连接手机，开启 USB 调试并确认授权。\r\n2. 打开手机 MambaPad，选择 USB 有线。\r\n3. 连接成功后，即可使用触控板和键盘。"
+	w.label(guide, theme.small, 44, 402, 532, 56, mutedColor, whiteColor)
+	footer := "关闭窗口后，连接保留在托盘"
 	if dry {
-		guide += "\r\n调试模式：不向电脑发送鼠标或键盘输入。"
+		footer = "测试模式 · 不发送电脑输入"
 	}
-	w.control("STATIC", guide, 0, 24, 162, 560, 92, 0)
-	w.control("STATIC", "连接详情", 0, 24, 264, 560, 24, 0)
-	w.detail = w.control("EDIT", "", 0x00800844, 24, 292, 560, 62, 0)
-	w.control("BUTTON", "最小化到托盘", 0x10000, 296, 374, 160, 34, 102)
-	w.control("BUTTON", "退出", 0x10000, 470, 374, 114, 34, 103)
+	w.label(footer, theme.small, 24, 495, 260, 20, mutedColor, creamColor)
+	w.control("BUTTON", "最小化到托盘", 0x1000b, 312, 486, 164, 36, 102)
+	w.control("BUTTON", "退出", 0x1000b, 488, 486, 108, 36, 103)
 	a.mu.Lock()
 	a.prefs.Serial = serial
 	a.notify = func() { proc("PostMessageW", hwnd, wmUpdate, 0, 0) }
