@@ -14,6 +14,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewConfiguration
+import com.github.ifeel.keysjoy.input.TapDragState
 import androidx.core.view.GestureDetectorCompat
 import com.github.ifeel.keysjoy.senders.RelativeMouseSender
 import com.github.ifeel.keysjoy.input.MouseInputSender
@@ -28,8 +29,8 @@ import kotlin.math.roundToInt
  *   * single-finger = mouse move with sub-pixel accumulation + speed coefficient
  *   * dual-finger   = HID scroll (unless ScaleGestureDetector is in progress)
  * - onSingleTapUp + activePointerCount: distinguish left-click (1 finger) vs right-click (≥2)
- * - onLongPress: begin drag (left-button held)
- * - Double-tap → enter drag mode; quick double-tap → double-click
+ * - Plain movement/holding never presses a mouse button.
+ * - Tap then second-tap-and-slide enters drag; quick double tap double-clicks.
  * - ScaleGestureDetector: pinch-to-zoom (future: wire to action)
  * - onTouch: dispatches to both detectors + tracks pointer state
  *
@@ -38,7 +39,19 @@ import kotlin.math.roundToInt
  */
 class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     private val dragPointer = DragPointerTracker()
-    private val dragActive get() = isLongPressed || isDragging || doubleTapActive || buttonHeld
+    private val taps=TapDragState()
+    private val tapHandler=Handler(Looper.getMainLooper())
+    private val confirmTap=Runnable { emit(taps.confirmSingle()) }
+    private var secondStartX=0f
+    private var secondStartY=0f
+    private val dragActive get() = taps.dragging || buttonHeld
+    private fun emit(actions:List<TapDragState.Action>) {
+        actions.forEach { when(it) {
+            TapDragState.Action.CLICK->rMouseSender.sendTestClick()
+            TapDragState.Action.DOWN->rMouseSender.sendLeftClickOn()
+            TapDragState.Action.UP->rMouseSender.sendLeftClickOff()
+        } }
+    }
     private fun pointerPoints(event: MotionEvent, excludeLifted: Boolean = false) =
         (0 until event.pointerCount)
             .filter { !excludeLifted || it != event.actionIndex }
@@ -53,15 +66,9 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
         scaleDetector?.onTouchEvent(cancel)
         cancel.recycle()
         wakeHandler.removeCallbacksAndMessages(null)
-        tapChecker.removeCallbacksAndMessages(null)
-        dragHandler.removeCallbacksAndMessages(null)
         wakeRunnables.clear()
-        dragRunnable = null
-        singleTapRunnable = null
-        doubleTapRunnable = null
-        isLongPressed = false
-        isDragging = false
-        doubleTapActive = false
+        tapHandler.removeCallbacks(confirmTap)
+        emit(taps.cancel())
         buttonHeld = false
         wheelMode = false
         activePointerCount = 0
@@ -93,15 +100,6 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     /** True when a right-click has been sent via ACTION_POINTER_UP — suppresses ghost left-click in onSingleTapUp. */
     private var rightClickSent = false
 
-    /** True when long-press has fired and left button is held. */
-    private var isLongPressed = false
-
-    /** True when a double-tap drag is active (left button held after double-tap hold). */
-    private var isDragging = false
-
-    /** True when double-tap-hold drag is active (moved from GestureListener). */
-    private var doubleTapActive = false
-
     /** True when the toolbar Left button is being held — drag-mode indicator. */
     private var buttonHeld = false
 
@@ -113,26 +111,6 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
 
     private val wakeHandler = Handler(Looper.getMainLooper())
     private val wakeRunnables = mutableListOf<Runnable>()
-
-    // ==================== Tap detection ====================
-
-    private val tapChecker = Handler(Looper.getMainLooper())
-    private var singleTapRunnable: Runnable? = null
-    private val doubleTapTimeout = ViewConfiguration.getDoubleTapTimeout().toLong()
-
-    // ==================== Double-tap drag ====================
-
-    private var doubleTapRunnable: Runnable? = null
-    private var dragConfirmed = false
-    private val dragStartDelay = 150L
-
-    // ==================== Custom drag trigger (200ms, faster than system 500ms) ====================
-
-    private val dragHandler = Handler(Looper.getMainLooper())
-    private var dragRunnable: Runnable? = null
-    private var dragStartX = 0f
-    private var dragStartY = 0f
-    private var dragSlop = 0  // initialized on first touch from ViewConfiguration
 
     // ==================== Gesture detectors (lazy-init on first touch) ====================
 
@@ -155,13 +133,14 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     /** True while the Wheel button is held — single-finger movement becomes scroll. */
     private var wheelMode = false
     private val wheelPointer = DragPointerTracker()
+    private val wheelButtonPointer = DragPointerTracker()
 
     /** Called by SelectDeviceActivity when the Wheel toolbar button is pressed/released. */
     fun setWheelMode(enabled: Boolean) {
         if (enabled && dragActive) return
         if (enabled) {
-            dragHandler.removeCallbacksAndMessages(null)
-            tapChecker.removeCallbacksAndMessages(null)
+            tapHandler.removeCallbacks(confirmTap)
+            emit(taps.cancel())
             wakeHandler.removeCallbacksAndMessages(null)
             val now=android.os.SystemClock.uptimeMillis()
             val cancel=MotionEvent.obtain(now,now,MotionEvent.ACTION_CANCEL,0f,0f,0)
@@ -169,10 +148,10 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
             scaleDetector?.onTouchEvent(cancel)
             cancel.recycle()
             gestureDetector=null;scaleDetector=null
-            dragRunnable=null;singleTapRunnable=null;doubleTapRunnable=null
         }
         wheelMode = enabled
         wheelPointer.clear()
+        wheelButtonPointer.clear()
         resetAccumulators()
     }
 
@@ -215,7 +194,7 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
         // Lazy-init detectors
         if (gestureDetector == null) {
             vibrator = v.context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            gestureDetector = GestureDetectorCompat(v.context, GestureListener())
+            gestureDetector = GestureDetectorCompat(v.context, GestureListener()).apply { setIsLongpressEnabled(false) }
         }
         if (scaleDetector == null) {
             scaleDetector = ScaleGestureDetector(v.context, ScaleListener())
@@ -239,16 +218,20 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
      * Wheel mode bypasses GestureDetector/ScaleDetector entirely.
      * Single-finger movement maps directly to HID scroll.
      */
-    private fun handleWheelTouch(event: MotionEvent) {
+    /** Direct dragging on the wheel button uses its own coordinate baseline. */
+    fun onWheelButtonTouch(event: MotionEvent) {
+        if(wheelMode)handleWheelTouch(event,wheelButtonPointer)
+    }
+    private fun handleWheelTouch(event: MotionEvent, pointer: DragPointerTracker = wheelPointer) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                wheelPointer.rebase(pointerPoints(event))
+                pointer.rebase(pointerPoints(event))
                 lastTouchX = event.x
                 lastTouchY = event.y
                 resetAccumulators()
             }
             MotionEvent.ACTION_MOVE -> {
-                val delta=wheelPointer.move(pointerPoints(event))?:return
+                val delta=pointer.move(pointerPoints(event))?:return
                 val dx = delta.x
                 val dy = delta.y
                 accumScrollX += -dx * scrollSpeed  // invert: finger move → content scroll
@@ -263,10 +246,10 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
                 lastTouchX = event.x
                 lastTouchY = event.y
             }
-            MotionEvent.ACTION_POINTER_DOWN -> wheelPointer.rebase(pointerPoints(event))
-            MotionEvent.ACTION_POINTER_UP -> wheelPointer.rebase(pointerPoints(event,excludeLifted=true))
+            MotionEvent.ACTION_POINTER_DOWN -> pointer.rebase(pointerPoints(event))
+            MotionEvent.ACTION_POINTER_UP -> pointer.rebase(pointerPoints(event,excludeLifted=true))
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                wheelPointer.clear()
+                pointer.clear()
                 resetAccumulators()
             }
         }
@@ -288,26 +271,20 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
             MotionEvent.ACTION_POINTER_DOWN -> {
                 activePointerCount = event.pointerCount
                 dragPointer.rebase(pointerPoints(event))
-                dragRunnable?.let { dragHandler.removeCallbacks(it) }
-                dragRunnable = null
             }
             MotionEvent.ACTION_MOVE -> {
-                // Cancel custom drag trigger if finger moved beyond touch slop
-                dragRunnable?.let {
-                    if (dragSlop == 0) {
-                        dragSlop = ViewConfiguration.get(v.context).scaledTouchSlop
-                    }
-                    val dx = Math.abs(event.x - dragStartX)
-                    val dy = Math.abs(event.y - dragStartY)
-                    if (dx > dragSlop || dy > dragSlop) {
-                        dragHandler.removeCallbacks(it)
-                        dragRunnable = null
-                    }
-                }
-
                 // Every drag uses one pointer-ID tracker and one movement path.
                 // GestureDetector's centroid and double-tap callbacks must not also move it.
-                val delta = dragPointer.move(pointerPoints(event))
+                if(taps.secondPressed && !taps.dragging && event.pointerCount==1) {
+                    val dx=event.x-secondStartX;val dy=event.y-secondStartY
+                    val slop=ViewConfiguration.get(v.context).scaledTouchSlop
+                    if(dx*dx+dy*dy>slop*slop) {
+                        emit(taps.startDrag())
+                        vibrator?.vibrate(VibrationEffect.createOneShot(30,VibrationEffect.DEFAULT_AMPLITUDE))
+                    }
+                }
+                // Preserve the initial baseline until drag classification completes.
+                val delta=if(taps.secondPressed&&!taps.dragging)null else dragPointer.move(pointerPoints(event))
                 if (dragActive && delta != null) {
                     accumMouseX += delta.x * mouseSpeed
                     accumMouseY += delta.y * mouseSpeed
@@ -328,7 +305,7 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
                 // pinching (scaled) or scrolling (scrolled).  The gesture detector's
                 // onSingleTapUp handles the static two-finger tap; this handles the
                 // case where the second finger lifts after a brief touch.
-                if (event.pointerCount == 2 && !scaled && !scrolled && !dragActive) {
+                if (event.pointerCount == 2 && !scaled && !scrolled && !dragActive && !taps.secondPressed) {
                     val fingerDistance = Math.hypot(
                         (event.getX(0) - event.getX(1)).toDouble(),
                         (event.getY(0) - event.getY(1)).toDouble()
@@ -343,25 +320,13 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
             }
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
-                // Cancel all pending runnables to prevent state leaks
-                dragRunnable?.let { dragHandler.removeCallbacks(it) }
-                dragRunnable = null
                 wakeHandler.removeCallbacksAndMessages(null)
                 wakeRunnables.clear()
-                singleTapRunnable?.let { tapChecker.removeCallbacks(it) }
-                doubleTapRunnable?.let { tapChecker.removeCallbacks(it) }
 
-                // Release drag state on final lift — only when no external button held.
-                // If buttonHeld is true the toolbar button owns leftButton; releasing here
-                // would prematurely drop the drag.
-                if (!buttonHeld) {
-                    if (isLongPressed || isDragging || doubleTapActive) {
-                        rMouseSender.sendLeftClickOff()
-                        Log.d("ViewListener", "Drag released (UP/CANCEL)")
-                    }
-                }
-                isLongPressed = false
-                isDragging = false
+                if(event.actionMasked==MotionEvent.ACTION_CANCEL) {
+                    tapHandler.removeCallbacks(confirmTap)
+                    emit(taps.cancel())
+                } else emit(taps.secondUp())
                 // Keep tap-suppression flags until GestureDetector consumes this UP.
                 resetAccumulators()
                 dragPointer.clear()
@@ -376,7 +341,6 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
             scaled = false
             scrolled = false
             rightClickSent = false
-            doubleTapActive = false
         }
     }
 
@@ -387,33 +351,18 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
         override fun onDown(e: MotionEvent): Boolean {
             Log.d("ViewListener", "onDown: sending multi-shot wake")
 
+            // Flush a preceding single click before an unrelated new movement.
+            if(!taps.secondPressed) {
+                tapHandler.removeCallbacks(confirmTap)
+                emit(taps.confirmSingle())
+            }
             // Reset gesture-chain state
-            isDragging = false
-            isLongPressed = false
             scaled = false
             scrolled = false
 
             // Record initial touch position for drag delta calculation
             lastTouchX = e.x
             lastTouchY = e.y
-
-            // Schedule custom 500ms drag trigger (faster than system default long-press).
-            // Skip when buttonHeld is active to avoid unwanted left-click.
-            dragStartX = e.x
-            dragStartY = e.y
-            dragRunnable?.let { dragHandler.removeCallbacks(it) }
-            dragRunnable = null
-            if (!buttonHeld) {
-                dragRunnable = Runnable {
-                    if (!isDragging && !isLongPressed && !doubleTapActive) {
-                        isLongPressed = true
-                        rMouseSender.sendLeftClickOn()
-                        vibrator?.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
-                        Log.d("ViewListener", "Custom drag (500ms): left button held, entering drag mode")
-                    }
-                }
-                dragHandler.postDelayed(dragRunnable!!, 500L)
-            }
 
             // Record gesture start time for speed ramp
             touchDownTime = System.currentTimeMillis()
@@ -438,27 +387,13 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
             return true
         }
 
-        override fun onLongPress(e: MotionEvent) {
-            if (buttonHeld || doubleTapActive || activePointerCount != 1) return
-            if (isLongPressed) {
-                // Already triggered by custom 200ms drag — avoid double-send
-                return
-            }
-            dragRunnable?.let { dragHandler.removeCallbacks(it) }
-            dragRunnable = null
-            isLongPressed = true
-            rMouseSender.sendLeftClickOn()
-            vibrator?.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
-            Log.d("ViewListener", "onLongPress (500ms fallback): left button held, entering drag mode")
-        }
-
         override fun onScroll(
             e1: MotionEvent?,
             e2: MotionEvent,
             distanceX: Float,
             distanceY: Float
         ): Boolean {
-            if (dragActive) return true
+            if (dragActive || taps.secondPressed) return true
             // Cancel pending multi-shot wake runnables once scrolling starts
             for (r in wakeRunnables) {
                 wakeHandler.removeCallbacks(r)
@@ -491,7 +426,7 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
                 }
                 // ---------- Single-finger mouse move ----------
                 else -> {
-                    val ramp = getRampMultiplier(skipRamp = isLongPressed || isDragging || buttonHeld)
+                    val ramp = getRampMultiplier(skipRamp = dragActive)
                     accumMouseX += -distanceX * mouseSpeed * ramp
                     accumMouseY += -distanceY * mouseSpeed * ramp
                     var mx = Math.round(accumMouseX)
@@ -519,55 +454,24 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
                 return true
             }
 
-            // Single-finger tap: schedule left-click via double-tap timeout
-            Log.d("ViewListener", "onSingleTapUp: scheduling tap check")
-            singleTapRunnable?.let { tapChecker.removeCallbacks(it) }
-
-            singleTapRunnable = Runnable {
-                Log.d("ViewListener", "Single tap confirmed → left click")
-                rMouseSender.sendTestClick()
-            }
-            tapChecker.postDelayed(singleTapRunnable!!, doubleTapTimeout)
+            // Shell needs an ordinary DOWN for dragging, not a double-click DOWN.
+            emit(taps.firstTap())
+            tapHandler.removeCallbacks(confirmTap)
+            tapHandler.postDelayed(confirmTap,ViewConfiguration.getDoubleTapTimeout().toLong())
             return true
         }
 
         override fun onDoubleTap(e: MotionEvent): Boolean {
-            Log.d("ViewListener", "onDoubleTap: cancelling single-tap timer")
-            singleTapRunnable?.let { tapChecker.removeCallbacks(it) }
-            singleTapRunnable = null
-            // The delayed first click was cancelled. Emit it before the second
-            // tap's down/up so a quick double tap produces two actual clicks.
-            if (!buttonHeld) rMouseSender.sendTestClick()
+            tapHandler.removeCallbacks(confirmTap)
             return true
         }
-
         override fun onDoubleTapEvent(e: MotionEvent): Boolean {
-            Log.d("ViewListener", "onDoubleTapEvent action=${e.action}")
-            when (e.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (buttonHeld) return true
-                    dragConfirmed = false
-                    isDragging = true
-                    doubleTapActive = true
-                    rMouseSender.sendLeftClickOn()
-                    vibrator?.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
-                    lastTouchX = e.x
-                    lastTouchY = e.y
-                    Log.d("ViewListener", "Double-tap drag: left button down")
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    // Already handled by the pointer-ID drag path in handleNormalTouch.
-                }
-                MotionEvent.ACTION_UP -> {
-                    // UP is also handled by onTouch ACTION_UP/CANCEL where
-                    // isDragging is reset and left button is released.
-                    // Clean up any pending drag runnable.
-                    doubleTapRunnable?.let { tapChecker.removeCallbacks(it) }
-                    doubleTapRunnable = null
-                    dragConfirmed = false
-                    doubleTapActive = false
-                }
+            if(e.actionMasked==MotionEvent.ACTION_DOWN && !buttonHeld) {
+                taps.secondDown()
+                secondStartX=e.x;secondStartY=e.y
+                lastTouchX=e.x;lastTouchY=e.y
             }
+            // UP/CANCEL is completed by the common path before detector dispatch.
             return true
         }
     }
@@ -576,14 +480,14 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
 
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
-            if (dragActive) return false
+            if (dragActive || taps.secondPressed) return false
             scaled = true
             Log.d("ViewListener", "Scale begin: span=${detector.currentSpan}")
             return true
         }
 
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            if (dragActive) return true
+            if (dragActive || taps.secondPressed) return true
             // Pinch-to-zoom: send Ctrl+scroll as zoom action.
             val factor = detector.scaleFactor
             val scrollDelta = Math.round((factor - 1.0f) * 10)

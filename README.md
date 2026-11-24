@@ -4,14 +4,17 @@
 
 **指尖一划，即刻掌控。** 把 Android 手机变成 Windows 电脑的触控板和键盘。
 
-暖白、橙红与琥珀色的简洁界面，原生 Android 控件，无 WebView。当前版本：**1.2.0-preview**。
+暖白、橙红与琥珀色的简洁界面，原生 Android 控件，无 WebView。当前版本：**1.2.2-preview**。
 
 <img src="branding/screenshots/home.png" width="230" alt="主页" /> <img src="branding/screenshots/portrait-ime.png" width="230" alt="系统输入法与触控板" />
 
 ## 功能
 
 - USB 有线模式，无需 Root；Windows 接收端 EXE 约 3.47 MiB。
-- 单指移动、轻点和双击、长按拖动、双指滚动，以及左键、右键与滚轮按钮。
+- 单指移动、轻点和双击、轻点一次，再快速按下并滑动来拖动、双指滚动，以及左键、右键与滚轮按钮。
+- 滚轮按钮支持直接按住上下拖动：下滑向下翻页，上滑向上翻页；也可按住滚轮再滑动触控区。
+- 先区分双击和拖动，再发送鼠标事件，兼容桌面空白处框选；单击会等待短暂的手势判定窗口。
+- 普通单指滑动或停留不按下左键；拖动时第二次按住不松手，抬起即结束。
 - 纯触控模式支持横竖屏，横屏扩大触控面积。
 - 竖屏键盘模式使用手机当前系统输入法，触控板随键盘实际高度调整；功能栏提供 Ctrl、Alt、Win、Shift、方向键等。
 - USB 支持手机输入法确认后的中文、英文和表情。
@@ -46,7 +49,7 @@
 
 源码位于 `app/` 和 `windows-receiver/`，构建步骤见 [BUILDING.md](BUILDING.md)。
 
-已通过 Android JVM 单测 15 项、Go 单测与 vet；真机回归覆盖手势、四种控制布局、页面返回、输入法组合/提交和高度适配。用户已确认中文、英文、回车、退格与主页横屏正常。完整 Android lint 尚有 41 个旧代码错误，未屏蔽或添加 baseline。
+已通过 Android JVM 单测 20 项、Go 单测与 vet；真机回归覆盖手势、四种控制布局、页面返回、输入法组合/提交和高度适配。用户已确认中文、英文、回车、退格与主页横屏正常。完整 Android lint 尚有 41 个旧代码错误，未屏蔽或添加 baseline。
 
 参考：[输入协议](docs/protocol-v1.md)、[验证记录](docs/shared-controls-1.2.md)。
 

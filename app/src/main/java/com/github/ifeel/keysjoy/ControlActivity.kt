@@ -145,8 +145,9 @@ open class ControlActivity : Activity() {
         button(screen.left,"left");button(screen.right,"right")
         screen.wheel.setOnTouchListener{v,event->
             when(event.actionMasked) {
-                MotionEvent.ACTION_DOWN->if(connected&&held.isEmpty()){listener?.setWheelMode(true);v.isPressed=true}
-                MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{listener?.setWheelMode(false);v.isPressed=false;if(event.actionMasked==MotionEvent.ACTION_UP)v.performClick()}
+                MotionEvent.ACTION_DOWN->if(connected&&held.isEmpty()){listener?.setWheelMode(true);listener?.onWheelButtonTouch(event);v.isPressed=true}
+                MotionEvent.ACTION_MOVE->listener?.onWheelButtonTouch(event)
+                MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{listener?.onWheelButtonTouch(event);listener?.setWheelMode(false);v.isPressed=false;if(event.actionMasked==MotionEvent.ACTION_UP)v.performClick()}
             };true
         }
     }
@@ -205,7 +206,7 @@ open class ControlActivity : Activity() {
                 override fun onStopTrackingTouch(bar:SeekBar){}
             })
         })
-        body.addView(MambaUi.text(this,"轻点点击，双指滚动，长按拖动。\n按住滚轮键，在触控区滑动即可滚动。\nShift / Ctrl / Alt / Win 对下一个按键生效。\n竖屏使用手机系统输入法，触控板随键盘高度调整。USB 支持中文和表情；蓝牙文字使用电脑输入法。",12f,MambaUi.muted).apply{setLineSpacing(dp(4).toFloat(),1f)})
+        body.addView(MambaUi.text(this,"轻点点击，双指滚动，轻点后再按住拖动。\n按住滚轮键，在触控区滑动即可滚动。\nShift / Ctrl / Alt / Win 对下一个按键生效。\n竖屏使用手机系统输入法，触控板随键盘高度调整。USB 支持中文和表情；蓝牙文字使用电脑输入法。",12f,MambaUi.muted).apply{setLineSpacing(dp(4).toFloat(),1f)})
         AlertDialog.Builder(this).setTitle("操作设置").setView(body).setPositiveButton("完成",null)
             .setNeutralButton(if(bluetooth)"连接设备" else "重新连接"){_,_->connectionAction()}.show()
     }

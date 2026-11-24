@@ -60,6 +60,8 @@ class UsbSmokeInstrumentation : Instrumentation() {
             activity = orient(activity, false)
             verifyKeyboardUi(activity)
             result.putString("keyboard_ui", "PASS: native IME commits Chinese/emoji, keeps composition local, and emits deletion")
+            verifyPointerGestures(activity)
+            result.putString("gesture_semantics", "PASS: move/hold never select, tap-then-slide drags, double tap clicks, wheel down/up directions")
             verifyDragPointerTransitions(activity)
             result.putString("drag_regression", "PASS: pointer reorder/lift has no jump, scroll or right-click during drag")
             val pad = activity.findViewById<View>(R.id.simple_trackpad_touch)
@@ -214,19 +216,78 @@ class UsbSmokeInstrumentation : Instrumentation() {
 
     private class Capture : MouseInputSender {
         val moves = mutableListOf<Pair<Int, Int>>()
+        var clicks = 0
+        val wheel = mutableListOf<Pair<Int,Int>>()
         var scrolls = 0
         var rightClicks = 0
         var down = 0
         var up = 0
         override fun sendMouseMove(dx: Int, dy: Int) { moves.add(dx to dy) }
-        override fun sendScroll(vscroll: Int, hscroll: Int) { scrolls++ }
-        override fun sendTestClick() {}
+        override fun sendScroll(vscroll: Int, hscroll: Int) { scrolls++;wheel.add(vscroll to hscroll) }
+        override fun sendTestClick() {clicks++}
         override fun sendRightClick() { rightClicks++ }
         override fun sendLeftClickOn() { down++ }
         override fun sendLeftClickOff() { up++ }
         override fun sendDragMove(dx: Int, dy: Int) = sendMouseMove(dx, dy)
         override fun wake() {}
         override fun releaseAll() {}
+    }
+
+    private fun verifyPointerGestures(activity:Activity) {
+        fun scenario(test:(ViewListener,Capture,(Int,Float,Float,Boolean)->Unit)->Unit) {
+            val capture=Capture()
+            lateinit var listener:ViewListener
+            lateinit var view:View
+            runOnMainSync {listener=ViewListener(capture).apply{mouseSpeed=1f;scrollSpeed=0.1f;rampEnabled=false};view=View(activity)}
+            var downTime=SystemClock.uptimeMillis()
+            val send={action:Int,x:Float,y:Float,wheelButton:Boolean->
+                runOnMainSync {
+                    if(action==MotionEvent.ACTION_DOWN)downTime=SystemClock.uptimeMillis()
+                    val e=MotionEvent.obtain(downTime,SystemClock.uptimeMillis(),action,x,y,0)
+                    if(wheelButton)listener.onWheelButtonTouch(e) else listener.onTouch(view,e)
+                    e.recycle()
+                }
+            }
+            try{test(listener,capture,send)}finally{runOnMainSync{listener.cancelAndRelease()}}
+        }
+        scenario{_,c,send->
+            send(MotionEvent.ACTION_DOWN,200f,400f,false)
+            SystemClock.sleep(700)
+            check(c.down==0){"Holding a single touch started selection"}
+            send(MotionEvent.ACTION_MOVE,200f,500f,false)
+            send(MotionEvent.ACTION_UP,200f,500f,false)
+            check(c.down==0&&c.up==0&&c.clicks==0&&c.moves.isNotEmpty()){ "Plain move became a drag" }
+        }
+        scenario{_,c,send->
+            send(MotionEvent.ACTION_DOWN,200f,400f,false)
+            SystemClock.sleep(50);send(MotionEvent.ACTION_UP,200f,400f,false)
+            check(c.clicks==0){"First tap must wait for drag classification"}
+            SystemClock.sleep(80);send(MotionEvent.ACTION_DOWN,200f,400f,false)
+            send(MotionEvent.ACTION_MOVE,230f,440f,false)
+            check(c.clicks==0&&c.down==1&&c.up==0&&c.moves.sumOf{it.second}==40){"Second-tap slide did not drag"}
+            send(MotionEvent.ACTION_CANCEL,230f,440f,false)
+            check(c.up==1){"Cancelled drag did not release"}
+        }
+        scenario{_,c,send->
+            send(MotionEvent.ACTION_DOWN,200f,400f,false)
+            SystemClock.sleep(50);send(MotionEvent.ACTION_UP,200f,400f,false)
+            SystemClock.sleep(80);send(MotionEvent.ACTION_DOWN,200f,400f,false)
+            SystemClock.sleep(50);send(MotionEvent.ACTION_UP,200f,400f,false)
+            check(c.clicks==2&&c.down==0&&c.up==0){"Quick double tap must emit two complete clicks"}
+        }
+        for(direct in listOf(true,false))scenario{listener,c,send->
+            runOnMainSync{listener.setWheelMode(true)}
+            send(MotionEvent.ACTION_DOWN,100f,200f,direct)
+            send(MotionEvent.ACTION_MOVE,100f,300f,direct)
+            send(MotionEvent.ACTION_UP,100f,300f,direct)
+            check(c.wheel.sumOf{it.first}==-10){"Downward wheel gesture must scroll down: ${c.wheel}"}
+            c.wheel.clear()
+            send(MotionEvent.ACTION_DOWN,100f,300f,direct)
+            send(MotionEvent.ACTION_MOVE,100f,200f,direct)
+            send(MotionEvent.ACTION_UP,100f,200f,direct)
+            check(c.wheel.sumOf{it.first}==10){"Upward wheel gesture must scroll up: ${c.wheel}"}
+            check(c.down==0&&c.clicks==0&&c.moves.isEmpty()){ "Wheel gesture leaked mouse events" }
+        }
     }
 
     private fun verifyDragPointerTransitions(activity: Activity) {
@@ -249,16 +310,19 @@ class UsbSmokeInstrumentation : Instrumentation() {
         }
         try {
             send(MotionEvent.ACTION_DOWN, Triple(7, 400f, 900f))
-            SystemClock.sleep(650)
-            send(MotionEvent.ACTION_MOVE, Triple(7, 400f, 910f))
-            send(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), Triple(7, 400f, 910f), Triple(19, 100f, 100f))
-            send(MotionEvent.ACTION_MOVE, Triple(19, 100f, 80f), Triple(7, 400f, 920f))
-            send(MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), Triple(19, 100f, 80f), Triple(7, 400f, 920f))
+            SystemClock.sleep(60)
+            send(MotionEvent.ACTION_UP, Triple(7, 400f, 900f))
+            SystemClock.sleep(80)
+            send(MotionEvent.ACTION_DOWN, Triple(7, 400f, 900f))
+            send(MotionEvent.ACTION_MOVE, Triple(7, 400f, 950f))
+            send(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), Triple(7, 400f, 950f), Triple(19, 100f, 100f))
+            send(MotionEvent.ACTION_MOVE, Triple(19, 100f, 80f), Triple(7, 400f, 960f))
+            send(MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), Triple(19, 100f, 80f), Triple(7, 400f, 960f))
             send(MotionEvent.ACTION_MOVE, Triple(19, 100f, 90f))
             send(MotionEvent.ACTION_UP, Triple(19, 100f, 90f))
             check(capture.down == 1 && capture.up == 1) { "Drag must press and release once: ${capture.down}/${capture.up}" }
-            check(capture.moves.sumOf { it.second } == 30) { "Unexpected drag deltas: ${capture.moves}" }
-            check(capture.moves.all { it.first == 0 && it.second in 0..10 }) { "Pointer jump: ${capture.moves}" }
+            check(capture.moves.sumOf { it.second } == 70) { "Unexpected drag deltas: ${capture.moves}" }
+            check(capture.moves.all { it.first == 0 && it.second in 0..50 }) { "Pointer jump: ${capture.moves}" }
             check(capture.scrolls == 0 && capture.rightClicks == 0) { "Unexpected scroll/right click during drag" }
         } finally { runOnMainSync { listener.cancelAndRelease() } }
     }

@@ -131,7 +131,7 @@ class TouchpadSurface(context: Context) : View(context) {
         if (height > 120*density) {
             canvas.drawText(if (connected) "指尖一划，即刻掌控" else "等待你的电脑", width/2f, height/2f, paint)
             paint.textSize = 11*density
-            canvas.drawText("单指移动  ·  双指滚动  ·  长按拖动", width/2f, height/2f+26*density, paint)
+            canvas.drawText("单指移动  ·  双指滚动  ·  轻点后再按住拖动", width/2f, height/2f+26*density, paint)
         }
         paint.textAlign = Paint.Align.LEFT
         for ((fx, fy) in fingers) {

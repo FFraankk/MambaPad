@@ -65,7 +65,7 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
                 root.addView(connectionRow,LinearLayout.LayoutParams(-1,dp(39)))
             }
             pad.id=R.id.simple_trackpad_touch
-            pad.contentDescription="触控区：单指移动、轻点点击、双指滚动、长按拖动"
+            pad.contentDescription="触控区：单指移动、轻点点击、双指滚动、轻点后再按住拖动"
             left.id=R.id.btn_mouse_left; wheel.id=R.id.btn_mouse_middle; right.id=R.id.btn_mouse_right
             val touchBlock=LinearLayout(activity).apply { orientation=LinearLayout.VERTICAL }
             touchBlock.addView(pad,LinearLayout.LayoutParams(-1,0,1f))
