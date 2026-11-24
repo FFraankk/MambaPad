@@ -49,6 +49,8 @@
 
 源码位于 `app/` 和 `windows-receiver/`，构建步骤见 [BUILDING.md](BUILDING.md)。
 
+长期开发入口：[项目约定](AGENTS.md)、[开发协作](CONTRIBUTING.md)、[架构](docs/ARCHITECTURE.md)、[路线图](docs/ROADMAP.md)、[发布流程](docs/RELEASING.md)、[多电脑开发](docs/MULTI_MACHINE.md)、[当前交接](docs/HANDOFF.md)。
+
 已通过 Android JVM 单测 20 项、Go 单测与 vet；真机回归覆盖手势、四种控制布局、页面返回、输入法组合/提交和高度适配。用户已确认中文、英文、回车、退格与主页横屏正常。完整 Android lint 尚有 41 个旧代码错误，未屏蔽或添加 baseline。
 
 参考：[输入协议](docs/protocol-v1.md)、[验证记录](docs/shared-controls-1.2.md)。

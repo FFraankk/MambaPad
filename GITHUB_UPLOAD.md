@@ -7,3 +7,5 @@
 当前版本为 v1.2.2-preview，标记为预发布版本。后续发布时更新版本号、CHANGELOG、发布说明与校验值；保留 LICENSE、NOTICE.txt 以及发布包中的第三方许可。
 
 SDK、开发工具、Gradle 缓存、设备调试授权、签名密钥和测试日志均不应提交。构建步骤见 BUILDING.md。
+
+完整发布步骤见 [发布流程](docs/RELEASING.md)，协作约定见 [AGENTS.md](AGENTS.md)。
