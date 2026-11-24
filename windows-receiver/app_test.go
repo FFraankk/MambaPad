@@ -66,6 +66,9 @@ func TestNativeStructureLayouts(t *testing.T) {
 	if unsafe.Sizeof(uintptr(0)) == 8 && (unsafe.Sizeof(notifyData{}) != 976 || unsafe.Sizeof(winClass{}) != 80 || unsafe.Sizeof(winMessage{}) != 48) {
 		t.Fatal(unsafe.Sizeof(notifyData{}), unsafe.Sizeof(winClass{}), unsafe.Sizeof(winMessage{}))
 	}
+	if unsafe.Sizeof(uintptr(0)) == 8 && (unsafe.Sizeof(paintData{}) != 72 || unsafe.Sizeof(drawItemData{}) != 64) {
+		t.Fatal("Native paint structure padding", unsafe.Sizeof(paintData{}), unsafe.Sizeof(drawItemData{}))
+	}
 }
 
 func TestBundledADBMarkerStaysWithinPackage(t *testing.T) {

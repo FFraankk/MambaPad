@@ -27,6 +27,8 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
     val left = MambaUi.button(activity, "左键")
     val wheel = MambaUi.button(activity, "滚轮")
     val right = MambaUi.button(activity, "右键")
+    val copy = MambaUi.button(activity, "复制")
+    val paste = MambaUi.button(activity, "粘贴")
     var onKey: (Int, Int) -> Unit = { _, _ -> }
     private val modifierButtons = mutableListOf<Pair<Button, Int>>()
     private val letterButtons = mutableListOf<Pair<Button, String>>()
@@ -83,12 +85,21 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
             pad.id=R.id.simple_trackpad_touch
             pad.contentDescription="触控区：单指移动、轻点点击、双指滚动、轻点后再按住拖动"
             left.id=R.id.btn_mouse_left; wheel.id=R.id.btn_mouse_middle; right.id=R.id.btn_mouse_right
+            copy.id=R.id.control_copy; paste.id=R.id.control_paste
+            for((button,usage) in listOf(copy to 6,paste to 25)) {
+                button.contentDescription=if(usage==6)"复制（电脑 Ctrl+C）" else "粘贴（电脑 Ctrl+V）"
+                button.setOnClickListener {
+                    if(pad.connected)TouchFeedback.perform(button,keyboard=true)
+                    resetModifiers()
+                    onKey(usage,1)
+                }
+            }
             val touchBlock=LinearLayout(activity).apply { orientation=LinearLayout.VERTICAL }
             touchBlock.addView(pad,LinearLayout.LayoutParams(-1,0,1f))
             val mouseRow=LinearLayout(activity).apply { setPadding(0,dp(5),0,0) }
-            for ((index,b) in listOf(left,wheel,right).withIndex()) {
+            for ((index,b) in listOf(left,wheel,right,copy,paste).withIndex()) {
                 b.textSize=13f
-                mouseRow.addView(b,LinearLayout.LayoutParams(0,dp(if(wide) 38 else 44),1f).apply {if(index<2)marginEnd=dp(6)})
+                mouseRow.addView(b,LinearLayout.LayoutParams(0,dp(if(wide) 38 else 44),1f).apply {if(index<4)marginEnd=dp(6)})
             }
             touchBlock.addView(mouseRow)
             if (wide && keyboard) {
@@ -109,7 +120,7 @@ class ControlScreen(val activity: Activity, val bluetooth: Boolean, val keyboard
                     header.visibility=if(active)View.GONE else View.VISIBLE
                     touchBlock.orientation=if(active)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
                     pad.layoutParams=if(active)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,0,1f)
-                    mouseRow.layoutParams=if(active)LinearLayout.LayoutParams(dp(180),-1) else LinearLayout.LayoutParams(-1,-2)
+                    mouseRow.layoutParams=if(active)LinearLayout.LayoutParams(dp(270),-1) else LinearLayout.LayoutParams(-1,-2)
                     mouseRow.setPadding(if(active)dp(6) else 0,if(active)0 else dp(5),0,0)
                     for(i in 0 until mouseRow.childCount) {
                         val child=mouseRow.getChildAt(i)
