@@ -1,37 +1,22 @@
 # 当前开发交接
 
-本文件只保留当前有效状态。开始先核对分支、git status、远程提交和本文件；历史细节见 CHANGELOG 与验证记录。
+## 当前状态
 
-## 已发布版本
+- 仓库：https://github.com/FFraankk/MambaPad 。main 与 develop 的功能代码已通过 PR #2 合并，功能提交为 5666d8e79e643359904aa80a8f2681094826d9de。
+- 当前发布目标为 1.3.0 正式版（versionCode 10），通过 v1.3.0 标签触发 Actions 构建和发布；最终公开状态以 GitHub Release 为准。旧 v1.3.0-preview 标签及附件保持不变。
+- Android 继续使用现有 debug 构建及兼容证书；Windows 未签名。主要支持 USB＋Windows，蓝牙兼容性仍在完善。
 
-- 仓库：https://github.com/FFraankk/MambaPad
-- [v1.3.0-preview](https://github.com/FFraankk/MambaPad/releases/tag/v1.3.0-preview) 已于 2026-11-24 发布，保留预发布标记，不设 Latest。
-- 发布标签与功能源码提交：6fc6aff633aa40932d23f6c0b754c2d337a8c010。发布后的交接文档更新位于 main，不改动该标签。
-- Android versionCode 9，沿用与先前预览版兼容的 debug 签名；Windows EXE 与安装包未签名。
-- Release 包含 Android APK、Android ZIP、Windows 便携 ZIP、Windows 安装 EXE、SHA256SUMS.txt，共 5 个附件；已逐项核对远程大小与 SHA256，确认公开状态及标签目标。
-- Windows EXE 从上述干净提交构建，嵌入的 vcs.revision 一致且 vcs.modified=false。下载产物留在工作区 release/ 与 dist/，不进入源码 Git 历史。
+## 已完成与验证
 
-## 本轮完成
+- 横屏系统输入法入口、紧凑触控布局及收起恢复；输入法确认后才发送文字。
+- 两种模式及横竖屏均提供 Ctrl+C / Ctrl+V 按钮；Windows 使用与 APK 一致的暖色、圆角卡片、橙色按钮，保留原生托盘及设备选择。
+- 上述功能源码的 Android 构建、20 项 JVM 测试、Mi 10 真机完整 instrumentation、Windows Go test/vet/build、便携及安装包构建通过；PR 和 main CI 均通过。
+- 本轮真机回归使用 dry-run 接收端，快捷键断言验证发送回调；未实测真实电脑剪贴板或蓝牙配对端到端。Windows 已检查设备选择、重连、托盘隐藏和恢复、关闭与退出。
+- 安装、覆盖升级、卸载及设置保留测试来自先前 1.3.0-preview 验证；新外观未重新执行实际安装／卸载。真实震动、多手机、多 DPI、Explorer 崩溃恢复未全面验证；完整 Android lint 的既有问题未修复或屏蔽。
 
-- 清理首页权限宣传、旧主页截图、无关品牌声明与外部项目研究内容，明确历史测试版本边界。
-- Android 增加触控板轻点、左右键、拖动开始及共享键盘的系统触觉反馈和总开关，不改变既有鼠标判定时序。
-- Windows 增加原生连接窗口、托盘、设备选择、单实例、设置和有限日志；提供便携 ZIP 与按当前用户安装／卸载的安装包及打包脚本。
+## 后续工作边界
 
-## 验证与限制
-
-- Android 构建、20 项 JVM 单测、整套应用内真机 instrumentation 通过；系统反馈请求和设置页截图已核验。
-- 16 项 Go 单测及 vet 通过；Windows 实测连接、设备选择、托盘隐藏、跨副本单实例，以及安装、运行中覆盖升级、卸载和设置保留。
-- 真实震动手感、多手机、蓝牙端到端、Explorer 崩溃恢复及多种 DPI 尚未全面确认；本轮未重新人工测试真实桌面框选。
-- 完整 lint 仍有 41 个既有错误、105 个警告；共享页和反馈模块无 lint 错误，未添加屏蔽或 baseline。
-- 完整边界见 [1.3 验证记录](desktop-haptics-1.3.md)。
-
-## 环境与下一步
-
-- 手机保留 1.3.0-preview 主包，辅助测试 APK 已移除；电脑测试安装、注册项和快捷方式已清理，接收端已退出，未终止共享 ADB。
-- 工具、签名、认证、缓存与产物留在 touchpad 工作区；不提交本机路径、凭据或密钥。已保留构建缓存，不预设其他机器具备相同环境。
-- 已实现 CI（push/PR 构建测试）与 Release（手动签名打包验证、版本标签自动发布），Actions 固定提交 SHA，发布时校验 APK 证书、身份及版本，草稿附件摘要核验后才公开；不覆盖既有 Release。
-- 已配置四项 Android 签名 Secrets，沿用现有预览证书；密钥加密备份已完成解密比对、实际恢复和篡改拒绝测试。备份及恢复口令当前仍在本机，用户须分开转存离线介质。正式签名迁移和 Windows 代码签名未实施。
-- 本地通过 Android 构建/JVM 单测、Windows Go test/vet/双包打包、Actions 静态检查、版本标签不匹配/缺失签名拒绝，以及四附件与校验清单检查。已推送至 main 并完成云端验证，源码提交 ccb02aed0a4100ae59d1d22d98a54002e5f44ae1：普通 [CI](https://github.com/FFraankk/MambaPad/actions/runs/45416727421) 及手动 [Release 验证](https://github.com/FFraankk/MambaPad/actions/runs/45416726993) 均通过，publish 按预期跳过。
-- 已下载云端 verified-release：四包 SHA256、ZIP CRC、APK 证书指纹均符合；便携 EXE 嵌入的 vcs.revision 等于上述提交且 vcs.modified=false。云端产物仅为验证 artifact（保留 7 天），未创建新版本，也未修改公开 1.3.0-preview 标签或附件。
-- 标签发布分支本次未实际发布新版本；本地已检查手动运行禁止发布、同名 Release 拒绝覆盖及错误证书拒绝。自动构建不替代实际手机、托盘或安装测试。
-- 下一项实施由用户请求确定；路线图与咨询不自动成为任务。系统变更和真实设备测试先核对当前会话授权，不重复索取已有授权。
+- 测试辅助 APK 已移除，保留手机主包；本轮接收端已退出，共享 ADB 未终止。
+- 工具、凭据、签名与构建产物不进入 Git。签名离线恢复方式见 RELEASING.md；正式签名迁移与 Windows 代码签名未实施。
+- CI 校验构建与单测；Release 工作流校验证书、版本、包完整性、远程摘要后发布五项附件。自动构建不替代设备或安装实测。
+- 下一项实施由用户请求确定，不自动实施路线图或咨询中的设想。

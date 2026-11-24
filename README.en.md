@@ -11,7 +11,7 @@
 
 Connect your phone to your PC over USB. Move the pointer, scroll pages, drag files, and type with your phone’s familiar keyboard. No root required. Choose a portable Windows app or an installer.
 
-**Android 9+ · Windows 10 / 11 x64 · Current version: 1.3.0-preview**
+**Android 9+ · Windows 10 / 11 x64 · Current version: 1.3.0**
 
 <div align="center">
   <img src="branding/screenshots/portrait-ime.png" width="260" alt="MambaPad portrait view with the touchpad and Android keyboard; screenshot shows the Chinese interface" />
@@ -22,22 +22,23 @@ Connect your phone to your PC over USB. Move the pointer, scroll pages, drag fil
 
 - **A touchpad in your hand**: Tap, double-tap, drag, and scroll with two fingers. Dedicated left, right, and scroll buttons are also available.
 - **Type with your favorite keyboard**: Over USB, send confirmed text from your phone’s input method, including Chinese, English, and emoji. A shortcut bar provides Ctrl, Alt, Win, Shift, arrow keys, and more.
-- **Layouts that fit the task**: Use your system keyboard in portrait, a split keyboard with a central touchpad in landscape, or a touchpad-only layout.
+- **Layouts that fit the task**: Use your system keyboard in portrait, a split keyboard with a central touchpad in landscape, or a touchpad-only layout. Tap **系统输入法** (System keyboard) in landscape to open your phone’s input method.
+- **Copy and paste with one tap**: Both layouts provide buttons for Ctrl+C / Ctrl+V in the active PC application.
 - **Feel each press**: System haptics respond to taps, mouse buttons, the start of a drag, and landscape keyboard presses. Turn them off in settings whenever you prefer.
 - **Keep your desktop clear**: A native Windows window shows connection status and lets you select a device. Minimize or close it to keep the connection running in the system tray.
 - **Install it or take it with you**: The installer adds a Start menu entry and supports uninstalling. The portable version runs after extraction. Neither requires a separate Java or .NET installation on your PC.
 
 ## Download
 
-The current release is **1.3.0-preview**. Install the Android APK on your phone and choose one Windows package for your PC.
+The current stable release is **1.3.0**. Install the Android APK on your phone and choose one Windows package for your PC.
 
 | Download | Use it for |
 | --- | --- |
-| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0-preview/MambaPad-1.3.0-preview.apk) | Installing on your Android phone |
-| [Windows installer](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0-preview/MambaPad-Windows-x64-1.3.0-preview-Setup.exe) | Installing on your PC with a Start menu entry |
-| [Windows portable](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0-preview/MambaPad-Windows-x64-1.3.0-preview-Portable.zip) | Running directly from an extracted folder |
+| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-1.3.0.apk) | Installing on your Android phone |
+| [Windows installer](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-Windows-x64-1.3.0-Setup.exe) | Installing on your PC with a Start menu entry |
+| [Windows portable](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-Windows-x64-1.3.0-Portable.zip) | Running directly from an extracted folder |
 
-Find all versions and file checksums on [Releases](https://github.com/FFraankk/MambaPad/releases). The preview APK retains its existing debug signing certificate. The Windows executable and installer are not code-signed.
+Find all versions and file checksums on [Releases](https://github.com/FFraankk/MambaPad/releases). The APK remains a debug build with the existing debug signing certificate, allowing updates over earlier previews. The Windows executable and installer are not code-signed.
 
 ## Get started
 

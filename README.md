@@ -11,7 +11,7 @@
 
 MambaPad 通过 USB 连接手机与电脑，让你用熟悉的触摸手势移动鼠标、滚动页面、拖动文件，并直接使用手机输入法打字。无需 Root，Windows 端提供便携版和安装版。
 
-**Android 9+ · Windows 10 / 11 x64 · 当前版本：1.3.0-preview**
+**Android 9+ · Windows 10 / 11 x64 · 当前版本：1.3.0**
 
 <div align="center">
   <img src="branding/screenshots/portrait-ime.png" width="260" alt="MambaPad 竖屏界面：触控板与手机系统输入法" />
@@ -22,22 +22,23 @@ MambaPad 通过 USB 连接手机与电脑，让你用熟悉的触摸手势移动
 
 - **手机就是触控板**：轻点、双击、拖动、双指滚动，配合独立的左键、右键与滚轮按钮。
 - **使用你熟悉的输入法**：USB 模式支持手机输入法确认后的中文、英文和表情；功能栏提供 Ctrl、Alt、Win、Shift 和方向键等。
-- **横竖屏各得其所**：竖屏搭配系统输入法；横屏键盘采用左右分区，中间保留触控板，也可切换为纯触控模式。
+- **横竖屏各得其所**：竖屏搭配系统输入法；横屏键盘采用左右分区，中间保留触控板，也可切换为纯触控模式；横屏点击 **系统输入法** 可使用手机输入法。
+- **复制粘贴，一键完成**：两种模式均提供复制、粘贴按钮，对应电脑当前应用的 Ctrl+C / Ctrl+V。
 - **每次按下，都有回应**：轻点、鼠标按键、拖动开始与横屏键盘提供系统触觉反馈，可在设置中关闭。
 - **电脑端安静待命**：原生状态窗口显示连接情况并支持选择设备，最小化或关闭窗口后收至托盘，连接继续保持。
 - **安装或解压，由你选择**：安装版支持从开始菜单启动及卸载；便携版解压即可使用，电脑端无需另装 Java 或 .NET。
 
 ## 下载
 
-当前提供 **1.3.0-preview 预览版**。手机安装 Android APK，电脑任选一种 Windows 版本。
+当前提供 **1.3.0 正式版**。手机安装 Android APK，电脑任选一种 Windows 版本。
 
 | 下载 | 适合谁 |
 | --- | --- |
-| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0-preview/MambaPad-1.3.0-preview.apk) | 安装到 Android 手机 |
-| [Windows 安装版](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0-preview/MambaPad-Windows-x64-1.3.0-preview-Setup.exe) | 希望安装到电脑，从开始菜单启动 |
-| [Windows 便携版](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0-preview/MambaPad-Windows-x64-1.3.0-preview-Portable.zip) | 希望解压即用，无需安装 |
+| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-1.3.0.apk) | 安装到 Android 手机 |
+| [Windows 安装版](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-Windows-x64-1.3.0-Setup.exe) | 希望安装到电脑，从开始菜单启动 |
+| [Windows 便携版](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-Windows-x64-1.3.0-Portable.zip) | 希望解压即用，无需安装 |
 
-全部版本与文件校验值见 [Releases](https://github.com/FFraankk/MambaPad/releases)。预览版 APK 沿用 debug 签名，Windows EXE 与安装包尚未做代码签名。
+全部版本与文件校验值见 [Releases](https://github.com/FFraankk/MambaPad/releases)。APK 仍为 debug 构建，沿用现有 debug 签名，可覆盖升级先前预览版，Windows EXE 与安装包尚未做代码签名。
 
 ## 快速开始
 

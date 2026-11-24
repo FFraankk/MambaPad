@@ -18,8 +18,8 @@ android {
         applicationId "com.github.ifeel.keysjoy.usb"
         minSdk 28
         targetSdk 35
-        versionCode 9
-        versionName "1.3.0-preview"
+        versionCode 10
+        versionName "1.3.0"
         testInstrumentationRunner "com.github.ifeel.keysjoy.UsbSmokeInstrumentation"
         multiDexEnabled true
         multiDexKeepProguard rootProject.file('multidex-keep.pro')
