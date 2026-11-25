@@ -4,11 +4,13 @@
 
 ## 当前发布
 
-- 用户已授权提交到 GitHub 并发布新版。本次准备 1.3.1，Android versionCode 11；正式公开及远端附件核验尚待 Release 流水线完成，不能将构建成功写成已发布。
+- [1.3.1](https://github.com/FFraankk/MambaPad/releases/tag/v1.3.1) 已于 2026-11-25 正式公开并设为 Latest，Android versionCode 11，标签指向 8d913785758f4f315c3908e271da302b13c29936。main / develop 已同步；后续交接文档提交不移动发布标签。
 - 新增拖拽/框选边缘续移：工具栏左键按住或轻点后再次按住滑动，进入 16dp 边缘带即沿原方向慢速续移，无停留等待。普通滑动、右键按住和直接按在边缘不触发。
 - 实现位于 EdgeMotionState / ViewListener，ControlActivity 区分左键与右键按住。Windows 协议和接收端功能未改，已有 1.3.0 Windows 接收端可继续使用。
 - 保持已有 debug 兼容签名；Windows EXE/安装包未签名。主要支持 USB＋Windows，蓝牙兼容性仍在完善。旧 Release 和标签不覆盖、不移动。
-- main 上已有未推送的文档 CI 路径过滤提交 d2b188f，本轮功能提交在其后；发布工作流不受文档路径过滤影响。
+- [Release 45557492103](https://github.com/FFraankk/MambaPad/actions/runs/45557492103) 的 metadata、Android、Windows、附件汇总和公开发布全部通过；修复后的草稿查询已完成新标签自动发布验证。
+- [普通 CI 45557491730](https://github.com/FFraankk/MambaPad/actions/runs/45557491730) 首次在 Maven 依赖解析阶段失败，只重试失败任务后第二次全部通过，无代码或标签变动。文档 CI 路径过滤提交 d2b188f 已一并推送，发布工作流不受其影响。
+- 五项公开附件均已下载，逐项核对远端 SHA-256/大小、SHA256SUMS、ZIP CRC、许可文件、Android ZIP 内 APK 一致性、APK 包名/版本/可信证书。Windows EXE 的 vcs.revision 与标签源码提交一致，vcs.modified=false。已补充本轮功能与验证范围的发布说明。
 
 ## 边缘续移验证
 
