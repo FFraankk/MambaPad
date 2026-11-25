@@ -147,8 +147,8 @@ open class ControlActivity : Activity() {
         fun button(view:View,name:String) {
             view.setOnTouchListener{v,event->
                 when(event.actionMasked) {
-                    MotionEvent.ACTION_DOWN->if(connected){TouchFeedback.perform(v);held.add(name);listener?.setButtonHeld(true);button(name,true);v.isPressed=true}
-                    MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{held.remove(name);button(name,false);listener?.setButtonHeld(held.isNotEmpty());v.isPressed=false;if(event.actionMasked==MotionEvent.ACTION_UP)v.performClick()}
+                    MotionEvent.ACTION_DOWN->if(connected){TouchFeedback.perform(v);held.add(name);listener?.setButtonHeld(true,"left" in held);button(name,true);v.isPressed=true}
+                    MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{held.remove(name);button(name,false);listener?.setButtonHeld(held.isNotEmpty(),"left" in held);v.isPressed=false;if(event.actionMasked==MotionEvent.ACTION_UP)v.performClick()}
                 };true
             }
         }

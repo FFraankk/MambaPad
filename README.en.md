@@ -11,7 +11,7 @@
 
 Connect your phone to your PC over USB. Move the pointer, scroll pages, drag files, and type with your phone’s familiar keyboard. No root required. Choose a portable Windows app or an installer.
 
-**Android 9+ · Windows 10 / 11 x64 · Current version: 1.3.0**
+**Android 9+ · Windows 10 / 11 x64 · Current version: 1.3.1**
 
 <div align="center">
   <img src="branding/screenshots/portrait-ime.png" width="260" alt="MambaPad portrait view with the touchpad and Android keyboard; screenshot shows the Chinese interface" />
@@ -30,13 +30,13 @@ Connect your phone to your PC over USB. Move the pointer, scroll pages, drag fil
 
 ## Download
 
-The current stable release is **1.3.0**. Install the Android APK on your phone and choose one Windows package for your PC.
+The current stable release is **1.3.1**. Install the Android APK on your phone and choose one Windows package for your PC.
 
 | Download | Use it for |
 | --- | --- |
-| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-1.3.0.apk) | Installing on your Android phone |
-| [Windows installer](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-Windows-x64-1.3.0-Setup.exe) | Installing on your PC with a Start menu entry |
-| [Windows portable](https://github.com/FFraankk/MambaPad/releases/download/v1.3.0/MambaPad-Windows-x64-1.3.0-Portable.zip) | Running directly from an extracted folder |
+| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-1.3.1.apk) | Installing on your Android phone |
+| [Windows installer](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-Windows-x64-1.3.1-Setup.exe) | Installing on your PC with a Start menu entry |
+| [Windows portable](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-Windows-x64-1.3.1-Portable.zip) | Running directly from an extracted folder |
 
 Find all versions and file checksums on [Releases](https://github.com/FFraankk/MambaPad/releases). The APK remains a debug build with the existing debug signing certificate, allowing updates over earlier previews. The Windows executable and installer are not code-signed.
 
@@ -57,6 +57,7 @@ Keep the PC app running while you use MambaPad. Closing its window sends it to t
 | Move the pointer | Slide with one finger |
 | Click / double-click | Tap once / tap twice |
 | Drag | Tap once, then quickly press again and slide; lift to release |
+| Keep dragging at the touchpad edge | Keep holding to continue slowly in the same direction; lift, release Left, or slide inward to stop |
 | Scroll | Slide with two fingers, or hold and drag the scroll button vertically |
 | Open a context menu | Tap the right mouse button |
 

@@ -1,6 +1,6 @@
 # 开发协作
 
-先读 [AGENTS.md](AGENTS.md) 和 [架构说明](docs/ARCHITECTURE.md)。当前正式发行版为 1.3.0，主要支持 USB＋Windows。开发任务应保持范围清晰：先复现，再改动，再验证，最后记录结果。
+先读 [AGENTS.md](AGENTS.md) 和 [架构说明](docs/ARCHITECTURE.md)。当前正式发行版为 1.3.1，主要支持 USB＋Windows。开发任务应保持范围清晰：先复现，再改动，再验证，最后记录结果。
 
 ## 先确认任务性质
 

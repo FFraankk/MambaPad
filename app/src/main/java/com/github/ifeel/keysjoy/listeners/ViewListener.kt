@@ -18,6 +18,7 @@ import androidx.core.view.GestureDetectorCompat
 import com.github.ifeel.keysjoy.senders.RelativeMouseSender
 import com.github.ifeel.keysjoy.input.MouseInputSender
 import com.github.ifeel.keysjoy.input.DragPointerTracker
+import com.github.ifeel.keysjoy.input.EdgeMotionState
 import kotlin.math.roundToInt
 
 /**
@@ -38,6 +39,42 @@ import kotlin.math.roundToInt
  */
 class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     private val dragPointer = DragPointerTracker()
+    private val edgeMotion = EdgeMotionState()
+    private val edgeHandler = Handler(Looper.getMainLooper())
+    private var edgeWidth = 0
+    private var edgeHeight = 0
+    private var leftButtonHeld = false
+    private var edgeAccumX = 0f
+    private var edgeAccumY = 0f
+    private val edgeFrame = object : Runnable {
+        override fun run() {
+            val view = touchView
+            if (view == null || !view.isAttachedToWindow || !view.isShown ||
+                view.width != edgeWidth || view.height != edgeHeight || wheelMode) {
+                stopEdgeMotion()
+                return
+            }
+            val delta = edgeMotion.tick(android.os.SystemClock.uptimeMillis())
+            edgeAccumX += delta.x
+            edgeAccumY += delta.y
+            val dx = edgeAccumX.roundToInt()
+            val dy = edgeAccumY.roundToInt()
+            if (dx != 0 || dy != 0) {
+                // Preserve current button state: ordinary movement never presses a button.
+                rMouseSender.sendMouseMove(dx, dy)
+                edgeAccumX -= dx
+                edgeAccumY -= dy
+            }
+            if (edgeMotion.armed) edgeHandler.postDelayed(this, 16L)
+        }
+    }
+
+    private fun stopEdgeMotion() {
+        edgeHandler.removeCallbacks(edgeFrame)
+        edgeMotion.stop()
+        edgeAccumX = 0f
+        edgeAccumY = 0f
+    }
     private val taps=TapDragState()
     private val tapHandler=Handler(Looper.getMainLooper())
     private val confirmTap=Runnable { emit(taps.confirmSingle()) }
@@ -59,6 +96,7 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     constructor(hidDevice: BluetoothHidDevice, host: BluetoothDevice, sender: RelativeMouseSender) : this(sender)
 
     fun cancelAndRelease() {
+        stopEdgeMotion()
         val now = android.os.SystemClock.uptimeMillis()
         val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
         gestureDetector?.onTouchEvent(cancel)
@@ -69,6 +107,7 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
         tapHandler.removeCallbacks(confirmTap)
         emit(taps.cancel())
         buttonHeld = false
+        leftButtonHeld = false
         wheelMode = false
         activePointerCount = 0
         scaled = false
@@ -125,8 +164,10 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     var rampEnabled: Boolean = true
 
     /** Called by SelectDeviceActivity when the Left toolbar button is pressed/released. */
-    fun setButtonHeld(held: Boolean) {
+    fun setButtonHeld(held: Boolean, leftHeld: Boolean = held) {
+        if (!leftHeld) stopEdgeMotion()
         buttonHeld = held
+        leftButtonHeld = leftHeld
     }
 
     // ==================== Wheel mode ====================
@@ -139,6 +180,7 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     /** Called by SelectDeviceActivity when the Wheel toolbar button is pressed/released. */
     fun setWheelMode(enabled: Boolean) {
         if (enabled && dragActive) return
+        stopEdgeMotion()
         if (enabled) {
             tapHandler.removeCallbacks(confirmTap)
             emit(taps.cancel())
@@ -265,6 +307,18 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
     private fun handleNormalTouch(v: View, event: MotionEvent) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                stopEdgeMotion()
+                edgeWidth = v.width
+                edgeHeight = v.height
+                val density = v.resources.displayMetrics.density
+                edgeMotion.begin(event.x / density, event.y / density,
+                    v.width / density, v.height / density, event.eventTime)
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_POINTER_UP,
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stopEdgeMotion()
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
                 activePointerCount = event.pointerCount
                 dragPointer.clear()
                 dragPointer.rebase(pointerPoints(event))
@@ -341,6 +395,20 @@ class ViewListener(val rMouseSender: MouseInputSender) : View.OnTouchListener {
         // Dispatch to both detectors — Mousedroid pattern
         scaleDetector?.onTouchEvent(event)
         gestureDetector?.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_MOVE && event.pointerCount == 1) {
+            val density = v.resources.displayMetrics.density
+            val wasArmed = edgeMotion.armed
+            edgeMotion.move(event.x / density, event.y / density, event.eventTime,
+                !scaled && !scrolled && (taps.dragging || leftButtonHeld))
+            // Keep one frame loop running even while MOVE events arrive at high frequency.
+            if (wasArmed && !edgeMotion.armed) {
+                edgeHandler.removeCallbacks(edgeFrame)
+                edgeAccumX = 0f
+                edgeAccumY = 0f
+            } else if (!wasArmed && edgeMotion.armed) {
+                edgeHandler.postDelayed(edgeFrame, 16L)
+            }
+        }
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
             activePointerCount = 0
             scaled = false

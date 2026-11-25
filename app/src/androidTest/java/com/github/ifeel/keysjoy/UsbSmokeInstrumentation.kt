@@ -17,13 +17,16 @@ import android.view.ViewGroup
 import android.widget.Button
 
 /** Sends events only to this app's own view, without INJECT_EVENTS or Root.
- * Moves only: it never clicks a potentially unrelated Windows application.
+ * edge_motion_only uses a fake sender. Opt-in edge_usb_case sends real mouse input
+ * and requires the host to focus and guard a disposable selection-test window first.
  */
 class UsbSmokeInstrumentation : Instrumentation() {
     private var feedbackPreview=false
     private var homePreview=false
     private var landscapeImeOnly=false
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments);landscapeImeOnly=arguments?.getString("landscape_ime_only")=="true";feedbackPreview=arguments?.getString("feedback_preview")=="true";homePreview=arguments?.getString("home_preview")=="true"; start() }
+    private var edgeMotionOnly=false
+    private var edgeUsbCase: String? = null
+    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments);edgeUsbCase=arguments?.getString("edge_usb_case");edgeMotionOnly=arguments?.getString("edge_motion_only")=="true";landscapeImeOnly=arguments?.getString("landscape_ime_only")=="true";feedbackPreview=arguments?.getString("feedback_preview")=="true";homePreview=arguments?.getString("home_preview")=="true"; start() }
 
     private fun openConnected(): Activity {
         val activity = startActivitySync(Intent(targetContext, UsbTouchpadActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -39,6 +42,80 @@ class UsbSmokeInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        edgeUsbCase?.let { scenario ->
+            val result = Bundle()
+            var activity: Activity? = null
+            try {
+                check(scenario == "ordinary" || scenario == "drag")
+                activity = openConnected()
+                val pad = activity.findViewById<View>(R.id.simple_trackpad_touch)
+                val density = activity.resources.displayMetrics.density
+                var startX = 0f
+                var endX = 0f
+                var y = 0f
+                runOnMainSync {
+                    check(pad.width > 120 * density && pad.height > 80 * density)
+                    startX = pad.width - 60 * density
+                    endX = pad.width - 4 * density
+                    y = pad.height / 2f
+                }
+                fun phase(name: String) = sendStatus(0, Bundle().apply { putString("phase", name) })
+                var downTime = 0L
+                fun send(action: Int, x: Float, touchY: Float) = runOnMainSync {
+                    if (action == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
+                    val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, touchY, 0)
+                    check(pad.dispatchTouchEvent(event))
+                    event.recycle()
+                }
+                phase("ready")
+                // Host must first focus its disposable native ListView and place the cursor there.
+                SystemClock.sleep(1200)
+                try {
+                    send(MotionEvent.ACTION_DOWN, startX, y)
+                    if (scenario == "drag") {
+                        send(MotionEvent.ACTION_UP, startX, y)
+                        SystemClock.sleep(60)
+                        send(MotionEvent.ACTION_DOWN, startX, y)
+                    }
+                    send(MotionEvent.ACTION_MOVE, endX, y + 20 * density)
+                    phase("edge_hold")
+                    SystemClock.sleep(600)
+                    send(MotionEvent.ACTION_UP, endX, y + 20 * density)
+                    phase("released")
+                    SystemClock.sleep(400)
+                    result.putString("result", "PASS: real USB $scenario edge stroke sent; inspect host ListView results")
+                } finally {
+                    send(MotionEvent.ACTION_CANCEL, endX, y + 20 * density)
+                }
+                runOnMainSync { activity.finish() }
+                finish(Activity.RESULT_OK, result)
+            } catch (e: Throwable) {
+                activity?.let { host -> runOnMainSync { host.finish() } }
+                result.putString("error", e.toString())
+                finish(Activity.RESULT_CANCELED, result)
+            }
+            return
+        }
+        if (edgeMotionOnly) {
+            val result = Bundle()
+            var activity: Activity? = null
+            try {
+                // This path uses only Capture: no USB connection or Windows input is needed.
+                activity = startActivitySync(Intent(targetContext, SplashScreenActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                verifyPointerGestures(activity)
+                verifyDragPointerTransitions(activity)
+                verifyEdgeMotion(activity)
+                result.putString("result", "PASS: edge continuation and existing gesture regressions (fake sender)")
+                finish(Activity.RESULT_OK, result)
+            } catch (e: Throwable) {
+                result.putString("error", e.toString())
+                finish(Activity.RESULT_CANCELED, result)
+            } finally {
+                activity?.let { host -> runOnMainSync { host.finish() } }
+            }
+            return
+        }
         if(feedbackPreview) {
             val result=Bundle()
             try {
@@ -88,6 +165,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
             verifyPointerGestures(activity)
             result.putString("gesture_semantics", "PASS: move/hold never select, tap-then-slide drags, double tap clicks, wheel down/up directions")
             verifyDragPointerTransitions(activity)
+            verifyEdgeMotion(activity)
             result.putString("drag_regression", "PASS: pointer reorder/lift has no jump, scroll or right-click during drag")
             val pad = activity.findViewById<View>(R.id.simple_trackpad_touch)
             val downTime = SystemClock.uptimeMillis()
@@ -401,6 +479,125 @@ class UsbSmokeInstrumentation : Instrumentation() {
             check(c.wheel.sumOf{it.first}==10){"Upward wheel gesture must scroll up: ${c.wheel}"}
             check(c.haptics==0){"Scrolling must not vibrate continuously"}
             check(c.down==0&&c.clicks==0&&c.moves.isEmpty()){ "Wheel gesture leaked mouse events" }
+        }
+    }
+
+    private fun verifyEdgeMotion(activity: Activity) {
+        val capture = Capture()
+        lateinit var listener: ViewListener
+        lateinit var view: View
+        val density = activity.resources.displayMetrics.density
+        runOnMainSync {
+            listener = ViewListener(capture).apply { mouseSpeed = 1f; rampEnabled = false; onHaptic = {} }
+            view = View(activity).apply { setOnTouchListener(listener) }
+            activity.addContentView(view, ViewGroup.LayoutParams((200 * density).toInt(), (200 * density).toInt()))
+        }
+        waitForIdleSync()
+        runOnMainSync { check(view.width > 48 * density && view.height > 48 * density) }
+        var downTime = 0L
+        fun send(action: Int, x: Float, y: Float = 100f) {
+            runOnMainSync {
+                if (action == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
+                val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x * density, y * density, 0)
+                check(view.dispatchTouchEvent(event))
+                event.recycle()
+            }
+        }
+        fun clear() = runOnMainSync { listener.cancelAndRelease(); capture.moves.clear() }
+        fun stroke() { send(MotionEvent.ACTION_DOWN, 100f); send(MotionEvent.ACTION_MOVE, 195f) }
+        fun arm() { runOnMainSync { listener.setButtonHeld(true) }; stroke() }
+        fun moving(): Boolean {
+            // This must produce output before the former 150ms dwell threshold.
+            SystemClock.sleep(80)
+            var moved = false
+            runOnMainSync {
+                moved = capture.moves.isNotEmpty()
+                check(capture.moves.all { it.first >= 0 && it.second == 0 }) { "Continuation changed direction" }
+            }
+            return moved
+        }
+        fun clearMoves() = runOnMainSync { capture.moves.clear() }
+        fun stopped() {
+            clearMoves()
+            SystemClock.sleep(400)
+            runOnMainSync { check(capture.moves.isEmpty()) { "Continuation survived stop condition" } }
+        }
+        try {
+            runOnMainSync { listener.setButtonHeld(true) }
+            send(MotionEvent.ACTION_DOWN, 195f)
+            stopped()
+            send(MotionEvent.ACTION_CANCEL, 195f)
+            clear()
+
+            stroke(); stopped(); clear()
+            runOnMainSync { listener.setButtonHeld(true, false) }
+            stroke(); stopped(); clear()
+
+            // Pressing Left after the pad contact began must also allow edge dragging.
+            send(MotionEvent.ACTION_DOWN, 100f)
+            runOnMainSync { listener.setButtonHeld(true) }
+            send(MotionEvent.ACTION_MOVE, 195f); clearMoves(); check(moving())
+            runOnMainSync { listener.setButtonHeld(false) }
+            stopped(); clear()
+
+            arm(); clearMoves()
+            check(moving()) { "Held-button edge motion did not start immediately without MOVE events" }
+            runOnMainSync { check(capture.down == 0 && capture.clicks == 0) { "Continuation emitted an extra button press" } }
+            clearMoves()
+            repeat(40) {
+                send(MotionEvent.ACTION_MOVE, if (it % 2 == 0) 195.05f else 195f)
+                SystemClock.sleep(5)
+            }
+            runOnMainSync { check(capture.moves.isNotEmpty()) { "Frequent jitter starved edge frames" } }
+            send(MotionEvent.ACTION_UP, 195f); stopped(); clear()
+
+            arm(); clearMoves(); check(moving())
+            send(MotionEvent.ACTION_MOVE, 192f); stopped(); clear()
+
+            arm(); clearMoves(); check(moving())
+            send(MotionEvent.ACTION_CANCEL, 195f); stopped(); clear()
+
+            arm(); clearMoves(); check(moving())
+            runOnMainSync { listener.setButtonHeld(false); listener.setWheelMode(true) }
+            stopped(); clear()
+
+            arm(); clearMoves(); check(moving())
+            runOnMainSync { listener.setButtonHeld(false) }
+            stopped(); clear()
+
+            arm(); clearMoves(); check(moving())
+            runOnMainSync { listener.cancelAndRelease() }
+            stopped(); clear()
+
+            // Two physical contacts must cancel the single-contact continuation immediately.
+            arm(); clearMoves(); check(moving())
+            runOnMainSync {
+                val properties = (0..1).map { MotionEvent.PointerProperties().apply { id = it } }.toTypedArray()
+                val coords = listOf(195f, 150f).map { MotionEvent.PointerCoords().apply {
+                    x = it * density; y = 100 * density; pressure = 1f
+                } }.toTypedArray()
+                val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(),
+                    MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                    2, properties, coords, 0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
+                view.dispatchTouchEvent(event)
+                event.recycle()
+            }
+            stopped(); clear()
+
+            // An already classified tap-drag keeps its one DOWN until the final UP.
+            send(MotionEvent.ACTION_DOWN, 100f); send(MotionEvent.ACTION_UP, 100f)
+            SystemClock.sleep(60)
+            stroke(); clearMoves(); check(moving())
+            runOnMainSync { check(capture.down == 1 && capture.up == 0 && capture.clicks == 0) }
+            send(MotionEvent.ACTION_UP, 195f); stopped()
+            runOnMainSync { check(capture.up == 1) }
+            clear()
+
+            arm(); clearMoves(); check(moving())
+            runOnMainSync { view.layout(0, 0, view.width, view.height - (30 * density).toInt()) }
+            stopped()
+        } finally {
+            runOnMainSync { listener.cancelAndRelease(); (view.parent as? ViewGroup)?.removeView(view) }
         }
     }
 
