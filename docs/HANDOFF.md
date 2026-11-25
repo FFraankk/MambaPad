@@ -2,6 +2,14 @@
 
 最后核对：2026-11-25（Asia/Hong_Kong）。历史变更见 CHANGELOG，待验证项见 ROADMAP。
 
+## 当前发布：1.3.2
+
+- [1.3.2](https://github.com/FFraankk/MambaPad/releases/tag/v1.3.2) 已于 2026-11-25 正式公开并设为 Latest，Android versionCode 12。标签指向 b9b38726674f9d3b6b39dd0c0390d518fcc49521；后续交接文档提交不移动标签，main / develop 同步。
+- [Release 45569745062](https://github.com/FFraankk/MambaPad/actions/runs/45569745062) 的 metadata、Android、Windows、汇总发布全部通过；[CI 45569745194](https://github.com/FFraankk/MambaPad/actions/runs/45569745194) 首次运行全部通过。本地 73 项 JVM 测试、Android 主/测试 APK 构建、Go test/vet 和 4 项发布元数据回归通过。
+- 五项公开附件已下载至本地忽略目录 dist/verify-1.3.2，独立核验远端摘要/大小、SHA256SUMS、ZIP CRC、LICENSE/NOTICE、Android ZIP 内嵌 APK 一致性；APK 包名、1.3.2 / code 12 及既有证书均正确。Windows EXE 的 vcs.revision 与标签源码一致，vcs.modified=false。
+- 功能与真机验证范围见下文。手机仍保留已测试的本地开发包（1.3.1 / code 11，功能源码与本轮一致），正式 1.3.2 下载附件仅完成上述静态校验，未重新安装回归。测试组件已移除，正常 USB 页面已恢复。
+- Windows 协议未变，已有 1.3.0 / 1.3.1 接收端仍可使用。APK 沿用 debug 构建/证书，Windows 未签名；未将蓝牙配对、实际系统桌面切换或完整 lint 记为通过。
+
 ## 1.3.2 功能与实机验证
 
 - 用户进一步要求加入一键显示桌面按钮和三、四指其他功能。ControlScreen 底部最右侧新增“桌面”，发送 Win+D 显示/恢复桌面，ControlActivity 先取消手势并释放鼠标按键。
@@ -21,7 +29,7 @@
 - 手机已同签名覆盖安装本轮本地开发包（仍为 versionCode 11 / 1.3.1，与公开附件不同），保留数据。临时测试组件/窗口收尾后移除，恢复正常 USB 控制页面；正式 1.3.1 Release 保持不变。
 - 用户确认这台小米手机的三指下滑用于系统截屏。后续三指方案需考虑系统拦截与 ACTION_CANCEL，不能假定所有手机都把完整手势交给应用；本轮未更改手机系统手势或安全设置。
 
-## 当前发布
+## 上一版本发布：1.3.1
 
 - [1.3.1](https://github.com/FFraankk/MambaPad/releases/tag/v1.3.1) 已于 2026-11-25 正式公开并设为 Latest，Android versionCode 11，标签指向 8d913785758f4f315c3908e271da302b13c29936。main / develop 已同步；后续交接文档提交不移动发布标签。
 - 新增拖拽/框选边缘续移：工具栏左键按住或轻点后再次按住滑动，进入 16dp 边缘带即沿原方向慢速续移，无停留等待。普通滑动、右键按住和直接按在边缘不触发。
