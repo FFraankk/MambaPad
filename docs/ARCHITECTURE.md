@@ -16,6 +16,14 @@ USB 协议细节见 [protocol-v1.md](protocol-v1.md)。包名仍沿用 com.githu
 
 ViewListener 处理 Android MotionEvent、系统双击窗口和触摸阈值；TapDragState 只做无 Android 依赖的状态分类，返回 CLICK / DOWN / UP。
 
+多指链由无 Android 依赖的 MultiFingerState 独占，直到全部手指抬起：两指按 pointer ID 追踪，以质心平移与指间距变化区分滚动和缩放，越过移动阈值后锁定本次模式。轻点同时限制各手指移动距离和总接触时间，右键只在最后一个 UP 发出。增减手指后的剩余单指不退回鼠标移动；出现第三指、指针替换或取消后，本链不再补发点击。已开始的拖拽仍由 DragPointerTracker 处理，多指变化只重建其基线，不改变已有按键状态。
+
+两指尚未认定滚动/捏合时，第三指可将手势交给 MultiFingerSwipeState；第四指到来时重建整组基线，不发送旧三指动作。已开始滚动/捏合后增加手指只取消本链，不转换成系统快捷键。三、四指质心移动至少 48dp、方向明确，且每根手指至少沿同方向移动 24dp，才记录候选动作；第一次抬指后冻结结果，直到最后一个 UP 才发送一次快捷键。第五指、替换指针、抬指后又加指、ACTION_CANCEL、模式切换均取消候选动作。
+
+TouchpadShortcut 统一定义 Win+D、Win+Tab、Alt+Tab、Alt+Shift+Tab 与 Ctrl+Win+左右键。三指左/右为下/上一个应用，上滑为任务视图，下滑无应用绑定；四指左/右为下/上一个桌面，上滑任务视图、下滑显示桌面。小米系统三指截屏可能抢走触摸流，系统 CANCEL 不发送快捷键，也不更改系统配置。ControlScreen 底部“桌面”按钮覆盖全部布局；ControlActivity 在按钮发送 Win+D 前取消当前手势并释放鼠标按键，避免拖拽残留。
+
+USB 缩放复用既有 keyboard 能力和 key/scroll/key 序列（Ctrl DOWN、滚轮、Ctrl UP），不新增协议类型；主线程连续入队，异常时 finally 尝试发送 UP，队列溢出或断连时沿用接收端释放整段会话的机制。未协商 keyboard 能力时不把捏合降级成普通滚动。主 BluetoothInputSender 将缩放与键盘动作放入同一队列，每次缩放发送 Ctrl 报告、滚轮、空键盘报告；旧 RelativeMouseSender 无共享键盘队列，不启用缩放。
+
 第一下轻点暂缓确认；第二下移动越过阈值，输出单次 DOWN；松开输出 UP。第二下不移动而松开，输出两次 CLICK。单击的等待不能通过“先点一下，再补拖动”消除：Windows 的 ListView 会把快速第二下变成双击消息，桌面框选流程与文字编辑器不同。
 
 DragPointerTracker 按 pointer ID 跟踪，指针增加/抬起时只建立新基线；不能把另一个手指坐标当成原手指位移。滚轮按钮与触控区使用独立基线。

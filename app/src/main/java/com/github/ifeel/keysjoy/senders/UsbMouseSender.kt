@@ -3,6 +3,7 @@ package com.github.ifeel.keysjoy.senders
 import com.github.ifeel.keysjoy.input.InputTransport
 import com.github.ifeel.keysjoy.input.MouseInputSender
 import com.github.ifeel.keysjoy.input.RemoteInputEvent
+import com.github.ifeel.keysjoy.input.TouchpadShortcut
 
 class UsbMouseSender(private val transport: InputTransport) : MouseInputSender {
     override fun sendMouseMove(dx: Int, dy: Int) {
@@ -21,6 +22,20 @@ class UsbMouseSender(private val transport: InputTransport) : MouseInputSender {
         }
     }
     fun button(button: String, down: Boolean) { transport.send(RemoteInputEvent.Button(button, down)) }
+    override fun sendZoom(steps: Int) {
+        if (steps == 0 || !transport.supportsKeyboard) return
+        // Consecutive FIFO frames, sent from the main thread. Queue overflow closes
+        // the session, whose receiver then releases every key rather than dropping UP.
+        transport.send(RemoteInputEvent.Key(224, true, 1))
+        try { sendScroll(steps, 0) } finally {
+            transport.send(RemoteInputEvent.Key(224, false, 0))
+        }
+    }
+    override fun sendShortcut(shortcut: TouchpadShortcut) {
+        if (!transport.supportsKeyboard) return
+        try { transport.send(RemoteInputEvent.Key(shortcut.usage, true, shortcut.modifiers)) }
+        finally { transport.send(RemoteInputEvent.Key(shortcut.usage, false, 0)) }
+    }
     override fun sendTestClick() { button("left", true); button("left", false) }
     override fun sendRightClick() { button("right", true); button("right", false) }
     override fun sendLeftClickOn() = button("left", true)

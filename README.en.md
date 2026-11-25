@@ -11,7 +11,7 @@
 
 Connect your phone to your PC over USB. Move the pointer, scroll pages, drag files, and type with your phone’s familiar keyboard. No root required. Choose a portable Windows app or an installer.
 
-**Android 9+ · Windows 10 / 11 x64 · Current version: 1.3.1**
+**Android 9+ · Windows 10 / 11 x64 · Current version: 1.3.2**
 
 <div align="center">
   <img src="branding/screenshots/portrait-ime.png" width="260" alt="MambaPad portrait view with the touchpad and Android keyboard; screenshot shows the Chinese interface" />
@@ -30,13 +30,13 @@ Connect your phone to your PC over USB. Move the pointer, scroll pages, drag fil
 
 ## Download
 
-The current stable release is **1.3.1**. Install the Android APK on your phone and choose one Windows package for your PC.
+The current stable release is **1.3.2**. Install the Android APK on your phone and choose one Windows package for your PC.
 
 | Download | Use it for |
 | --- | --- |
-| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-1.3.1.apk) | Installing on your Android phone |
-| [Windows installer](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-Windows-x64-1.3.1-Setup.exe) | Installing on your PC with a Start menu entry |
-| [Windows portable](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-Windows-x64-1.3.1-Portable.zip) | Running directly from an extracted folder |
+| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.2/MambaPad-1.3.2.apk) | Installing on your Android phone |
+| [Windows installer](https://github.com/FFraankk/MambaPad/releases/download/v1.3.2/MambaPad-Windows-x64-1.3.2-Setup.exe) | Installing on your PC with a Start menu entry |
+| [Windows portable](https://github.com/FFraankk/MambaPad/releases/download/v1.3.2/MambaPad-Windows-x64-1.3.2-Portable.zip) | Running directly from an extracted folder |
 
 Find all versions and file checksums on [Releases](https://github.com/FFraankk/MambaPad/releases). The APK remains a debug build with the existing debug signing certificate, allowing updates over earlier previews. The Windows executable and installer are not code-signed.
 
@@ -62,6 +62,8 @@ Keep the PC app running while you use MambaPad. Closing its window sends it to t
 | Open a context menu | Tap the right mouse button |
 
 The shortcut bar above the portrait keyboard scrolls horizontally. Tap **收起** (Hide) to dismiss the phone keyboard. A brief gesture recognition delay distinguishes clicks, double-clicks, and dragging.
+
+Three- and four-finger swipes trigger once all fingers lift. Three fingers: swipe left/right for the next/previous app, or up for Task View. Four fingers: swipe left/right for the next/previous virtual desktop, up for Task View, or down to show the desktop. The **桌面** (Desktop) button also shows/restores the desktop. Three-finger down is reserved for the phone system screenshot gesture. Two-finger tap opens the context menu; pinch sends Ctrl+wheel zoom where supported by the PC app.
 
 ## Before you use it
 

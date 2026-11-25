@@ -7,11 +7,13 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.github.ifeel.keysjoy.input.MouseInputSender
 import com.github.ifeel.keysjoy.listeners.ViewListener
 import com.github.ifeel.keysjoy.input.KeyboardModifiers
+import com.github.ifeel.keysjoy.input.TouchpadShortcut
 import com.github.ifeel.keysjoy.ui.ControlScreen
 import android.view.ViewGroup
 import android.widget.Button
@@ -25,8 +27,20 @@ class UsbSmokeInstrumentation : Instrumentation() {
     private var homePreview=false
     private var landscapeImeOnly=false
     private var edgeMotionOnly=false
+    private var multiFingerOnly=false
+    private var shortcutsOnly=false
     private var edgeUsbCase: String? = null
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments);edgeUsbCase=arguments?.getString("edge_usb_case");edgeMotionOnly=arguments?.getString("edge_motion_only")=="true";landscapeImeOnly=arguments?.getString("landscape_ime_only")=="true";feedbackPreview=arguments?.getString("feedback_preview")=="true";homePreview=arguments?.getString("home_preview")=="true"; start() }
+    override fun onCreate(arguments: Bundle?) {
+        super.onCreate(arguments)
+        shortcutsOnly=arguments?.getString("shortcuts_only")=="true"
+        multiFingerOnly=arguments?.getString("multi_finger_only")=="true"
+        edgeUsbCase=arguments?.getString("shortcut_usb_case")?:arguments?.getString("edge_usb_case")
+        edgeMotionOnly=arguments?.getString("edge_motion_only")=="true"
+        landscapeImeOnly=arguments?.getString("landscape_ime_only")=="true"
+        feedbackPreview=arguments?.getString("feedback_preview")=="true"
+        homePreview=arguments?.getString("home_preview")=="true"
+        start()
+    }
 
     private fun openConnected(): Activity {
         val activity = startActivitySync(Intent(targetContext, UsbTouchpadActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -46,7 +60,8 @@ class UsbSmokeInstrumentation : Instrumentation() {
             val result = Bundle()
             var activity: Activity? = null
             try {
-                check(scenario == "ordinary" || scenario == "drag")
+                check(scenario in listOf("ordinary", "drag", "scroll", "zoom", "right_tap", "desktop_button",
+                    "three_left", "three_right", "three_up", "three_down", "four_left", "four_right", "four_up", "four_down"))
                 activity = openConnected()
                 val pad = activity.findViewById<View>(R.id.simple_trackpad_touch)
                 val density = activity.resources.displayMetrics.density
@@ -67,23 +82,85 @@ class UsbSmokeInstrumentation : Instrumentation() {
                     check(pad.dispatchTouchEvent(event))
                     event.recycle()
                 }
+                fun contacts(action: Int, vararg points: Triple<Int, Float, Float>) = runOnMainSync {
+                    if (action == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
+                    val properties = points.map { point -> MotionEvent.PointerProperties().apply {
+                        id = point.first; toolType = MotionEvent.TOOL_TYPE_FINGER
+                    } }.toTypedArray()
+                    val coords = points.map { point -> MotionEvent.PointerCoords().apply {
+                        this.x = point.second; this.y = point.third; pressure = 1f; size = .1f
+                    } }.toTypedArray()
+                    val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, points.size,
+                        properties, coords, 0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
+                    check(pad.dispatchTouchEvent(event))
+                    event.recycle()
+                }
                 phase("ready")
                 // Host must first focus its disposable native ListView and place the cursor there.
                 SystemClock.sleep(1200)
                 try {
-                    send(MotionEvent.ACTION_DOWN, startX, y)
-                    if (scenario == "drag") {
-                        send(MotionEvent.ACTION_UP, startX, y)
-                        SystemClock.sleep(60)
+                    if (scenario == "ordinary" || scenario == "drag") {
                         send(MotionEvent.ACTION_DOWN, startX, y)
+                        if (scenario == "drag") {
+                            send(MotionEvent.ACTION_UP, startX, y)
+                            SystemClock.sleep(60)
+                            send(MotionEvent.ACTION_DOWN, startX, y)
+                        }
+                        send(MotionEvent.ACTION_MOVE, endX, y + 20 * density)
+                        phase("edge_hold")
+                        SystemClock.sleep(600)
+                        send(MotionEvent.ACTION_UP, endX, y + 20 * density)
+                    } else if (scenario == "desktop_button") {
+                        runOnMainSync { activity.findViewById<View>(R.id.control_desktop).performClick() }
+                    } else if (scenario.startsWith("three_") || scenario.startsWith("four_")) {
+                        val count=if(scenario.startsWith("three_"))3 else 4
+                        val dx=when { scenario.endsWith("left")->-65f;scenario.endsWith("right")->65f;else->0f }
+                        val dy=when { scenario.endsWith("up")->-65f;scenario.endsWith("down")->65f;else->0f }
+                        fun ps(n:Int, moved:Boolean=false)=(0 until n).map { i ->
+                            Triple(i+7,pad.width/2f+(i*45f-(count-1)*22.5f+if(moved)dx else 0f)*density,y+(if(moved)dy else 0f)*density)
+                        }.toTypedArray()
+                        contacts(MotionEvent.ACTION_DOWN,*ps(1))
+                        for(n in 2..count)contacts(MotionEvent.ACTION_POINTER_DOWN or ((n-1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),*ps(n))
+                        contacts(MotionEvent.ACTION_MOVE,*ps(count,true))
+                        phase("gesture")
+                        SystemClock.sleep(100)
+                        for(n in count downTo 2)contacts(MotionEvent.ACTION_POINTER_UP or ((n-1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),*ps(n,true))
+                        contacts(MotionEvent.ACTION_UP,*ps(1,true))
+                    } else {
+                        val center = pad.width / 2f
+                        fun a(span: Float, offsetY: Float = 0f) = Triple(7, center - span * density / 2, y + offsetY * density)
+                        fun b(span: Float, offsetY: Float = 0f) = Triple(19, center + span * density / 2, y + offsetY * density)
+                        val pointerUp = MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+                        contacts(MotionEvent.ACTION_DOWN, a(80f))
+                        contacts(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), a(80f), b(80f))
+                        when (scenario) {
+                            "right_tap" -> {
+                                contacts(pointerUp, a(80f), b(80f))
+                                phase("first_lift")
+                                SystemClock.sleep(40)
+                                contacts(MotionEvent.ACTION_UP, a(80f))
+                            }
+                            "scroll" -> {
+                                contacts(MotionEvent.ACTION_MOVE, a(80f, 30f), b(80f, 30f))
+                                phase("gesture")
+                                SystemClock.sleep(150)
+                                contacts(pointerUp, a(80f, 30f), b(80f, 30f))
+                                contacts(MotionEvent.ACTION_UP, a(80f, 30f))
+                            }
+                            "zoom" -> {
+                                contacts(MotionEvent.ACTION_MOVE, a(100f), b(100f))
+                                phase("gesture")
+                                SystemClock.sleep(100)
+                                contacts(MotionEvent.ACTION_MOVE, a(130f), b(130f))
+                                SystemClock.sleep(150)
+                                contacts(pointerUp, a(130f), b(130f))
+                                contacts(MotionEvent.ACTION_UP, a(130f))
+                            }
+                        }
                     }
-                    send(MotionEvent.ACTION_MOVE, endX, y + 20 * density)
-                    phase("edge_hold")
-                    SystemClock.sleep(600)
-                    send(MotionEvent.ACTION_UP, endX, y + 20 * density)
                     phase("released")
                     SystemClock.sleep(400)
-                    result.putString("result", "PASS: real USB $scenario edge stroke sent; inspect host ListView results")
+                    result.putString("result", "PASS: real USB $scenario gesture sent; inspect the guarded host result")
                 } finally {
                     send(MotionEvent.ACTION_CANCEL, endX, y + 20 * density)
                 }
@@ -96,20 +173,24 @@ class UsbSmokeInstrumentation : Instrumentation() {
             }
             return
         }
-        if (edgeMotionOnly) {
+        if (edgeMotionOnly || multiFingerOnly || shortcutsOnly) {
             val result = Bundle()
             var activity: Activity? = null
             try {
-                // This path uses only Capture: no USB connection or Windows input is needed.
-                activity = startActivitySync(Intent(targetContext, SplashScreenActivity::class.java)
+                // Shortcut layout checks use the actual adjustResize control window,
+                // but replace its key callbacks with Capture before clicking buttons.
+                activity = if(shortcutsOnly)openConnected() else startActivitySync(Intent(targetContext, SplashScreenActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                if (shortcutsOnly) activity = verifyDesktopUi(activity)
                 verifyPointerGestures(activity)
                 verifyDragPointerTransitions(activity)
+                verifyMultiFingerGestures(activity)
+                verifySystemSwipes(activity)
                 verifyEdgeMotion(activity)
-                result.putString("result", "PASS: edge continuation and existing gesture regressions (fake sender)")
+                result.putString("result", "PASS: multi-finger, edge continuation and existing gesture regressions (fake sender)")
                 finish(Activity.RESULT_OK, result)
             } catch (e: Throwable) {
-                result.putString("error", e.toString())
+                result.putString("error", android.util.Log.getStackTraceString(e))
                 finish(Activity.RESULT_CANCELED, result)
             } finally {
                 activity?.let { host -> runOnMainSync { host.finish() } }
@@ -165,6 +246,7 @@ class UsbSmokeInstrumentation : Instrumentation() {
             verifyPointerGestures(activity)
             result.putString("gesture_semantics", "PASS: move/hold never select, tap-then-slide drags, double tap clicks, wheel down/up directions")
             verifyDragPointerTransitions(activity)
+            verifyMultiFingerGestures(activity)
             verifyEdgeMotion(activity)
             result.putString("drag_regression", "PASS: pointer reorder/lift has no jump, scroll or right-click during drag")
             val pad = activity.findViewById<View>(R.id.simple_trackpad_touch)
@@ -405,12 +487,16 @@ class UsbSmokeInstrumentation : Instrumentation() {
         var clicks = 0
         var haptics = 0
         val wheel = mutableListOf<Pair<Int,Int>>()
+        val zooms = mutableListOf<Int>()
+        val shortcuts = mutableListOf<TouchpadShortcut>()
         var scrolls = 0
         var rightClicks = 0
         var down = 0
         var up = 0
         override fun sendMouseMove(dx: Int, dy: Int) { moves.add(dx to dy) }
         override fun sendScroll(vscroll: Int, hscroll: Int) { scrolls++;wheel.add(vscroll to hscroll) }
+        override fun sendZoom(steps: Int) { zooms.add(steps) }
+        override fun sendShortcut(shortcut: TouchpadShortcut) { shortcuts.add(shortcut) }
         override fun sendTestClick() {clicks++}
         override fun sendRightClick() { rightClicks++ }
         override fun sendLeftClickOn() { down++ }
@@ -480,6 +566,237 @@ class UsbSmokeInstrumentation : Instrumentation() {
             check(c.haptics==0){"Scrolling must not vibrate continuously"}
             check(c.down==0&&c.clicks==0&&c.moves.isEmpty()){ "Wheel gesture leaked mouse events" }
         }
+    }
+
+    private fun verifyMultiFingerGestures(activity: Activity) {
+        fun p(id: Int, x: Float, y: Float = 100f) = Triple(id, x, y)
+        val pointerDown = MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+        val pointerUp = MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+        fun scenario(name: String, test: (ViewListener, Capture, (Int, List<Triple<Int, Float, Float>>) -> Unit) -> Unit) {
+            val capture = Capture()
+            lateinit var listener: ViewListener
+            lateinit var view: View
+            val density = activity.resources.displayMetrics.density
+            runOnMainSync {
+                listener = ViewListener(capture).apply { mouseSpeed = 1f; scrollSpeed = .1f; rampEnabled = false; onHaptic = {} }
+                view = View(activity)
+            }
+            var downTime = 0L
+            val send = { action: Int, points: List<Triple<Int, Float, Float>> ->
+                runOnMainSync {
+                    if (action == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
+                    val properties = points.map { point -> MotionEvent.PointerProperties().apply {
+                        id = point.first; toolType = MotionEvent.TOOL_TYPE_FINGER
+                    } }.toTypedArray()
+                    val coords = points.map { point -> MotionEvent.PointerCoords().apply {
+                        x = point.second * density; y = point.third * density; pressure = 1f; size = .1f
+                    } }.toTypedArray()
+                    val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, points.size,
+                        properties, coords, 0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
+                    listener.onTouch(view, event)
+                    event.recycle()
+                }
+            }
+            try {
+                test(listener, capture, send)
+                SystemClock.sleep(ViewConfiguration.getDoubleTapTimeout().toLong() + 30L)
+                runOnMainSync { check(capture.clicks == 0 && capture.down == 0 && capture.up == 0) {
+                    "$name emitted a delayed left click or drag"
+                } }
+            } finally { runOnMainSync { listener.cancelAndRelease() } }
+        }
+        fun start(send: (Int, List<Triple<Int, Float, Float>>) -> Unit) {
+            send(MotionEvent.ACTION_DOWN, listOf(p(7, 50f)))
+            send(pointerDown, listOf(p(7, 50f), p(19, 150f)))
+        }
+        fun end(send: (Int, List<Triple<Int, Float, Float>>) -> Unit, a: Triple<Int, Float, Float> = p(7, 50f), b: Triple<Int, Float, Float> = p(19, 150f)) {
+            send(pointerUp, listOf(a, b))
+            send(MotionEvent.ACTION_UP, listOf(a))
+        }
+        scenario("two-finger tap") { _, c, send ->
+            start(send)
+            send(pointerUp, listOf(p(7, 50f), p(19, 150f)))
+            check(c.rightClicks == 0) { "Right click fired before final lift" }
+            send(MotionEvent.ACTION_UP, listOf(p(7, 50f)))
+            check(c.rightClicks == 1 && c.moves.isEmpty() && c.wheel.isEmpty() && c.zooms.isEmpty())
+        }
+        scenario("long hold") { _, c, send ->
+            start(send); SystemClock.sleep(320); end(send)
+            check(c.rightClicks == 0 && c.wheel.isEmpty() && c.zooms.isEmpty())
+        }
+        scenario("parallel scroll and remaining finger") { _, c, send ->
+            start(send)
+            send(MotionEvent.ACTION_MOVE, listOf(p(19, 180f, 140f), p(7, 80f, 140f)))
+            check(c.wheel.any { it.first > 0 && it.second > 0 } && c.zooms.isEmpty())
+            send(MotionEvent.ACTION_POINTER_UP, listOf(p(19, 180f, 140f), p(7, 80f, 140f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 280f, 300f)))
+            send(MotionEvent.ACTION_UP, listOf(p(7, 280f, 300f)))
+            check(c.rightClicks == 0 && c.moves.isEmpty())
+        }
+        scenario("pinch and reversal") { _, c, send ->
+            start(send)
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 35f), p(19, 165f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 20f), p(19, 180f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 50f), p(19, 150f)))
+            end(send)
+            check(c.zooms.any { it > 0 } && c.zooms.any { it < 0 } && c.wheel.isEmpty())
+            check(c.rightClicks == 0 && c.moves.isEmpty())
+        }
+        scenario("scroll locks mode") { _, c, send ->
+            start(send)
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 50f, 130f), p(19, 150f, 130f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 20f, 130f), p(19, 180f, 130f)))
+            end(send, p(7, 20f, 130f), p(19, 180f, 130f))
+            check(c.wheel.isNotEmpty() && c.zooms.isEmpty() && c.rightClicks == 0)
+        }
+        scenario("pinch locks mode") { _, c, send ->
+            start(send)
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 20f), p(19, 180f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 70f, 160f), p(19, 230f, 160f)))
+            end(send, p(7, 70f, 160f), p(19, 230f, 160f))
+            check(c.zooms.isNotEmpty() && c.wheel.isEmpty() && c.rightClicks == 0)
+        }
+        scenario("three and four fingers") { _, c, send ->
+            start(send)
+            send(MotionEvent.ACTION_POINTER_DOWN or (2 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(p(7, 50f), p(19, 150f), p(30, 250f)))
+            send(MotionEvent.ACTION_POINTER_DOWN or (3 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(p(7, 50f), p(19, 150f), p(30, 250f), p(40, 300f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 50f, 200f), p(19, 150f, 200f), p(30, 250f, 200f), p(40, 300f, 200f)))
+            send(MotionEvent.ACTION_POINTER_UP or (3 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(p(7, 50f, 200f), p(19, 150f, 200f), p(30, 250f, 200f), p(40, 300f, 200f)))
+            send(MotionEvent.ACTION_POINTER_UP or (2 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(p(7, 50f, 200f), p(19, 150f, 200f), p(30, 250f, 200f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 50f, 250f), p(19, 150f, 250f)))
+            end(send, p(7, 50f, 250f), p(19, 150f, 250f))
+            check(c.moves.isEmpty() && c.wheel.isEmpty() && c.zooms.isEmpty() && c.rightClicks == 0)
+        }
+        scenario("single movement then second finger") { _, c, send ->
+            send(MotionEvent.ACTION_DOWN, listOf(p(7, 50f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 90f)))
+            send(pointerDown, listOf(p(7, 90f), p(19, 150f)))
+            end(send, p(7, 90f))
+            check(c.rightClicks == 0)
+        }
+        scenario("remaining finger moves before UP") { _, c, send ->
+            start(send)
+            send(pointerUp, listOf(p(7, 50f), p(19, 150f)))
+            send(MotionEvent.ACTION_UP, listOf(p(7, 100f)))
+            check(c.rightClicks == 0 && c.moves.isEmpty())
+        }
+        scenario("cancel pinch and start fresh") { _, c, send ->
+            start(send)
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 20f), p(19, 180f)))
+            send(MotionEvent.ACTION_CANCEL, listOf(p(7, 20f), p(19, 180f)))
+            send(MotionEvent.ACTION_DOWN, listOf(p(7, 50f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 90f)))
+            send(MotionEvent.ACTION_UP, listOf(p(7, 90f)))
+            check(c.rightClicks == 0 && c.moves.isNotEmpty())
+        }
+        scenario("toolbar press cancels active two-finger gesture") { listener, c, send ->
+            start(send)
+            runOnMainSync { listener.setButtonHeld(true) }
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 50f, 150f), p(19, 150f, 150f)))
+            send(MotionEvent.ACTION_MOVE, listOf(p(7, 20f, 150f), p(19, 180f, 150f)))
+            end(send, p(7, 20f, 150f), p(19, 180f, 150f))
+            runOnMainSync { listener.setButtonHeld(false) }
+            check(c.wheel.isEmpty() && c.zooms.isEmpty() && c.rightClicks == 0 && c.moves.isEmpty())
+        }
+    }
+
+    private fun verifySystemSwipes(activity: Activity) {
+        val cases = listOf(
+            Triple(3, -65f to 0f, TouchpadShortcut.NEXT_APP),
+            Triple(3, 65f to 0f, TouchpadShortcut.PREVIOUS_APP),
+            Triple(3, 0f to -65f, TouchpadShortcut.TASK_VIEW),
+            Triple(3, 0f to 65f, null),
+            Triple(4, -65f to 0f, TouchpadShortcut.NEXT_DESKTOP),
+            Triple(4, 65f to 0f, TouchpadShortcut.PREVIOUS_DESKTOP),
+            Triple(4, 0f to -65f, TouchpadShortcut.TASK_VIEW),
+            Triple(4, 0f to 65f, TouchpadShortcut.SHOW_DESKTOP))
+        for ((count, movement, action) in cases) for (cancel in listOf(false, true)) {
+            val capture = Capture()
+            lateinit var listener: ViewListener
+            lateinit var view: View
+            val density = activity.resources.displayMetrics.density
+            runOnMainSync { listener = ViewListener(capture).apply { rampEnabled=false; onHaptic={} }; view=View(activity) }
+            var downTime = 0L
+            fun send(eventAction: Int, n: Int, dx: Float = 0f, dy: Float = 0f) = runOnMainSync {
+                if (eventAction == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
+                val properties = (0 until n).map { MotionEvent.PointerProperties().apply { id=it+7; toolType=MotionEvent.TOOL_TYPE_FINGER } }.toTypedArray()
+                val coords = (0 until n).map { i -> MotionEvent.PointerCoords().apply {
+                    this.x=(60+i*50+dx)*density; this.y=(120+dy)*density; pressure=1f
+                } }.toTypedArray()
+                val event = MotionEvent.obtain(downTime,SystemClock.uptimeMillis(),eventAction,n,properties,coords,0,0,1f,1f,0,0,android.view.InputDevice.SOURCE_TOUCHSCREEN,0)
+                listener.onTouch(view,event);event.recycle()
+            }
+            try {
+                send(MotionEvent.ACTION_DOWN,1)
+                for (n in 2..count) send(MotionEvent.ACTION_POINTER_DOWN or ((n-1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),n)
+                send(MotionEvent.ACTION_MOVE,count,movement.first,movement.second)
+                check(capture.shortcuts.isEmpty()) { "Swipe fired before lift" }
+                if (cancel) send(MotionEvent.ACTION_CANCEL,count,movement.first,movement.second)
+                else {
+                    for (n in count downTo 2) send(MotionEvent.ACTION_POINTER_UP or ((n-1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),n,movement.first,movement.second)
+                    send(MotionEvent.ACTION_UP,1,movement.first,movement.second)
+                }
+                val expected = if (cancel || action==null) emptyList() else listOf(action)
+                check(capture.shortcuts==expected) { "Unexpected $count-finger action: ${capture.shortcuts}, expected $expected" }
+                check(capture.moves.isEmpty() && capture.wheel.isEmpty() && capture.zooms.isEmpty() && capture.rightClicks==0 && capture.clicks==0 && capture.down==0)
+            } finally { runOnMainSync { listener.cancelAndRelease() } }
+        }
+    }
+
+    private fun verifyDesktopUi(initial: Activity): Activity {
+        var activity=initial
+        val activityName=initial.javaClass.name
+        val original=initial.resources.configuration.orientation
+        for (wide in listOf(false,true)) {
+            val wanted=if(wide)android.content.res.Configuration.ORIENTATION_LANDSCAPE else android.content.res.Configuration.ORIENTATION_PORTRAIT
+            if(activity.resources.configuration.orientation!=wanted) activity=nextActivity(activityName) {
+                activity.requestedOrientation=if(wide)android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
+            var previousScreen:ControlScreen?=null
+            for (bluetooth in listOf(false,true)) for (keyboard in listOf(false,true)) {
+                lateinit var screen:ControlScreen
+                val sent=mutableListOf<Pair<Int,Int>>()
+                val modifiers=KeyboardModifiers()
+                runOnMainSync {
+                    previousScreen?.editor?.hideKeyboard()
+                    activity.window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+                    screen=ControlScreen(activity,bluetooth,keyboard,modifiers)
+                    screen.onKey={usage,mask->sent.add(usage to mask)}
+                    screen.connection(true)
+                    activity.setContentView(screen.root)
+                    previousScreen=screen
+                }
+                waitForIdleSync();SystemClock.sleep(100)
+                fun checkButton() = runOnMainSync {
+                    check(screen.desktop.isShown && screen.desktop.width>=32*activity.resources.displayMetrics.density) { "Desktop button hidden or too narrow" }
+                    check(screen.desktop.layout?.lineCount==1) { "Desktop button text wrapped" }
+                    val visible=android.graphics.Rect()
+                    val location=IntArray(2)
+                    screen.desktop.getGlobalVisibleRect(visible)
+                    screen.desktop.getLocationOnScreen(location)
+                    val baseline=location[1]+screen.desktop.baseline
+                    check(baseline+screen.desktop.paint.fontMetrics.top>=visible.top && baseline+screen.desktop.paint.fontMetrics.bottom<=visible.bottom) {
+                        "Desktop text clipped: view=${screen.desktop.width}x${screen.desktop.height}, baseline=$baseline, visible=$visible"
+                    }
+                    modifiers.toggle(1);modifiers.toggle(4)
+                    screen.desktop.performClick()
+                    check(modifiers.mask==0 && sent.last()==(7 to 8)) { "Desktop button did not send Win+D and reset modifiers" }
+                }
+                checkButton()
+                if(!bluetooth)screenshot("desktop-${if(wide)"landscape" else "portrait"}-${if(keyboard)"keyboard" else "touchpad"}")
+                if(wide && keyboard) {
+                    runOnMainSync { screen.systemIme.performClick() }
+                    SystemClock.sleep(600);waitForIdleSync();checkButton()
+                    if(!bluetooth)screenshot("desktop-landscape-ime")
+                    runOnMainSync { screen.systemIme.performClick() }
+                    waitForIdleSync()
+                }
+            }
+        }
+        if(activity.resources.configuration.orientation!=original) activity=nextActivity(activityName) {
+            activity.requestedOrientation=if(original==android.content.res.Configuration.ORIENTATION_LANDSCAPE)android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        return activity
     }
 
     private fun verifyEdgeMotion(activity: Activity) {

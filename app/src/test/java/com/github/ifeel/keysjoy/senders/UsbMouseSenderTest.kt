@@ -2,11 +2,12 @@ package com.github.ifeel.keysjoy.senders
 
 import com.github.ifeel.keysjoy.input.InputTransport
 import com.github.ifeel.keysjoy.input.RemoteInputEvent
+import com.github.ifeel.keysjoy.input.TouchpadShortcut
 import org.junit.Assert.*
 import org.junit.Test
 
 class UsbMouseSenderTest {
-    private class Capture : InputTransport {
+    private class Capture(override val supportsKeyboard: Boolean = false) : InputTransport {
         override val isConnected = true
         val events = mutableListOf<RemoteInputEvent>()
         override fun send(event: RemoteInputEvent) { events.add(event) }
@@ -39,5 +40,54 @@ class UsbMouseSenderTest {
         s.sendLeftClickOn(); s.wake(); s.sendMouseMove(1, 1); s.releaseAll()
         assertEquals(3, t.events.size)
         assertEquals(RemoteInputEvent.ReleaseAll, t.events.last())
+    }
+    @Test fun zoomBracketsWheelWithCtrlWithoutMouseButtonEvents() {
+        val t = Capture(supportsKeyboard = true)
+        val s = UsbMouseSender(t)
+        s.sendZoom(2)
+        assertEquals(listOf(RemoteInputEvent.Key(224, true, 1),
+            RemoteInputEvent.Scroll(240, 0), RemoteInputEvent.Key(224, false, 0)), t.events)
+    }
+    @Test fun zoomWithoutKeyboardCapabilityNeverBecomesPlainScrolling() {
+        val t = Capture()
+        UsbMouseSender(t).sendZoom(2)
+        assertTrue(t.events.isEmpty())
+    }
+    @Test fun zeroZoomDoesNotPressCtrlAndNegativeZoomReleasesIt() {
+        val t = Capture(supportsKeyboard = true)
+        val s = UsbMouseSender(t)
+        s.sendZoom(0)
+        assertTrue(t.events.isEmpty())
+        s.sendZoom(-1)
+        assertEquals(RemoteInputEvent.Scroll(-120, 0), t.events[1])
+        assertEquals(RemoteInputEvent.Key(224, false, 0), t.events.last())
+    }
+    @Test fun zoomAttemptsCtrlReleaseEvenIfWheelSendFails() {
+        val events = mutableListOf<RemoteInputEvent>()
+        val t = object : InputTransport {
+            override val isConnected = true
+            override val supportsKeyboard = true
+            override fun send(event: RemoteInputEvent) {
+                events.add(event)
+                if (event is RemoteInputEvent.Scroll) error("simulated transport failure")
+            }
+            override fun close() {}
+        }
+        try { UsbMouseSender(t).sendZoom(1); fail("Expected transport failure") }
+        catch (_: IllegalStateException) {}
+        assertEquals(RemoteInputEvent.Key(224, false, 0), events.last())
+    }
+    @Test fun shortcutsSendCompleteModifierChordsWithoutClicks() {
+        for (action in TouchpadShortcut.entries) {
+            val t = Capture(supportsKeyboard = true)
+            UsbMouseSender(t).sendShortcut(action)
+            assertEquals(listOf(RemoteInputEvent.Key(action.usage, true, action.modifiers),
+                RemoteInputEvent.Key(action.usage, false, 0)), t.events)
+        }
+    }
+    @Test fun shortcutsRequireKeyboardCapability() {
+        val t = Capture()
+        UsbMouseSender(t).sendShortcut(TouchpadShortcut.SHOW_DESKTOP)
+        assertTrue(t.events.isEmpty())
     }
 }

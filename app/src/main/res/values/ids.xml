@@ -12,6 +12,7 @@
     <item type="id" name="control_right_panel" />
     <item type="id" name="control_copy" />
     <item type="id" name="control_paste" />
+    <item type="id" name="control_desktop" />
     <item type="id" name="home_usb" />
     <item type="id" name="home_bluetooth" />
 <item name="control_ime" type="id"/>

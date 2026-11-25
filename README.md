@@ -11,7 +11,7 @@
 
 MambaPad 通过 USB 连接手机与电脑，让你用熟悉的触摸手势移动鼠标、滚动页面、拖动文件，并直接使用手机输入法打字。无需 Root，Windows 端提供便携版和安装版。
 
-**Android 9+ · Windows 10 / 11 x64 · 当前版本：1.3.1**
+**Android 9+ · Windows 10 / 11 x64 · 当前版本：1.3.2**
 
 <div align="center">
   <img src="branding/screenshots/portrait-ime.png" width="260" alt="MambaPad 竖屏界面：触控板与手机系统输入法" />
@@ -30,13 +30,13 @@ MambaPad 通过 USB 连接手机与电脑，让你用熟悉的触摸手势移动
 
 ## 下载
 
-当前提供 **1.3.1 正式版**。手机安装 Android APK，电脑任选一种 Windows 版本。
+当前提供 **1.3.2 正式版**。手机安装 Android APK，电脑任选一种 Windows 版本。
 
 | 下载 | 适合谁 |
 | --- | --- |
-| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-1.3.1.apk) | 安装到 Android 手机 |
-| [Windows 安装版](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-Windows-x64-1.3.1-Setup.exe) | 希望安装到电脑，从开始菜单启动 |
-| [Windows 便携版](https://github.com/FFraankk/MambaPad/releases/download/v1.3.1/MambaPad-Windows-x64-1.3.1-Portable.zip) | 希望解压即用，无需安装 |
+| [Android APK](https://github.com/FFraankk/MambaPad/releases/download/v1.3.2/MambaPad-1.3.2.apk) | 安装到 Android 手机 |
+| [Windows 安装版](https://github.com/FFraankk/MambaPad/releases/download/v1.3.2/MambaPad-Windows-x64-1.3.2-Setup.exe) | 希望安装到电脑，从开始菜单启动 |
+| [Windows 便携版](https://github.com/FFraankk/MambaPad/releases/download/v1.3.2/MambaPad-Windows-x64-1.3.2-Portable.zip) | 希望解压即用，无需安装 |
 
 全部版本与文件校验值见 [Releases](https://github.com/FFraankk/MambaPad/releases)。APK 仍为 debug 构建，沿用现有 debug 签名，可覆盖升级先前预览版，Windows EXE 与安装包尚未做代码签名。
 
@@ -59,7 +59,14 @@ MambaPad 通过 USB 连接手机与电脑，让你用熟悉的触摸手势移动
 | 拖动 | 轻点一次，再快速按住并滑动，抬起结束 |
 | 拖动到触摸板边缘 | 保持按住，鼠标沿原方向缓慢续移；抬手、松开左键或往回滑即停止 |
 | 滚动页面 | 双指滑动，或按住滚轮按钮上下拖动 |
-| 右键菜单 | 点击右键按钮 |
+| 右键菜单 | 双指轻点，或点击右键按钮 |
+| 缩放 | 双指捏合，发送 Ctrl＋滚轮；效果取决于电脑应用 |
+| 显示 / 恢复桌面 | 点击 **桌面**，或四指下滑 |
+| 切换应用 | 三指左 / 右滑：下一个 / 上一个应用 |
+| 任务视图 | 三指或四指上滑 |
+| 切换虚拟桌面 | 四指左 / 右滑：下一个 / 上一个桌面 |
+
+多指滑动在全部手指抬起后触发一次。三指下滑留给手机系统截图，不发送电脑快捷键。
 
 竖屏键盘上方的功能栏可以横向滑动；点击 **收起** 隐藏手机输入法。轻点会有短暂的手势判定等待，以区分单击、双击和拖动。
 

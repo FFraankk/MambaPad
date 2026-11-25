@@ -78,6 +78,13 @@ open class ControlActivity : Activity() {
         screen.settings.setOnClickListener{settings()}
         screen.connect.setOnClickListener{connectionAction()}
         screen.onKey={usage,mask->screen.editor?.resetContext();sendKey(usage,mask)}
+        screen.onDesktop={
+            runCatching{gesture?.cancelAndRelease()}
+            held.clear();screen.resetModifiers()
+            listOf(screen.left,screen.right,screen.wheel).forEach{it.isPressed=false}
+            screen.editor?.resetContext()
+            sendKey(7,8)
+        }
         screen.onText={count,text->sendText(count,text)}
         screen.onImeModeChanged={runCatching{gesture?.cancelAndRelease()};held.clear();screen.resetModifiers()}
         val currentScreen=screen

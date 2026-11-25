@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import com.github.ifeel.keysjoy.input.MouseInputSender
 import com.github.ifeel.keysjoy.input.HidReportEncoder
+import com.github.ifeel.keysjoy.input.TouchpadShortcut
 import com.github.ifeel.keysjoy.reports.KeyboardReport
 import com.github.ifeel.keysjoy.reports.ScrollableTrackpadMouseReport
 
@@ -14,7 +15,8 @@ class BluetoothInputSender(private val hid: BluetoothHidDevice, private val host
     private var buttons = 0
     private var closed = false
     private val handler = Handler(Looper.getMainLooper())
-    private val keys = java.util.ArrayDeque<Pair<Int, Int>>()
+    private data class KeyboardAction(val usage: Int, val modifiers: Int, val zoom: Int = 0)
+    private val keys = java.util.ArrayDeque<KeyboardAction>()
     private var keyBusy = false
     private fun report(id: Int, bytes: ByteArray) {
         // Permission can be revoked while an existing HID session is active.
@@ -55,14 +57,29 @@ class BluetoothInputSender(private val hid: BluetoothHidDevice, private val host
     override fun wake() { mouse() } // Preserve held buttons while waking the HID link.
     fun key(usage: Int, modifiers: Int) {
         if (closed || keys.size >= 128) return
-        keys.add(usage to modifiers)
+        keys.add(KeyboardAction(usage, modifiers))
         nextKey()
     }
+    override fun sendZoom(steps: Int) {
+        if (closed || steps == 0 || keys.size >= 128) return
+        // Serialize zoom with keyboard presses so their delayed UP cannot clear Ctrl mid-zoom.
+        keys.add(KeyboardAction(0, 1, steps))
+        nextKey()
+    }
+    override fun sendShortcut(shortcut: TouchpadShortcut) = key(shortcut.usage, shortcut.modifiers)
     private fun nextKey() {
         if (closed || keyBusy || keys.isEmpty()) return
         keyBusy = true
-        val (usage, modifiers) = keys.removeFirst()
+        val (usage, modifiers, zoom) = keys.removeFirst()
         report(KeyboardReport.ID, HidReportEncoder.keyboard(usage,modifiers))
+        if (zoom != 0) {
+            try { sendScroll(zoom, 0) } finally {
+                if (!closed) report(KeyboardReport.ID, byteArrayOf(0,0,0))
+                keyBusy = false
+            }
+            nextKey()
+            return
+        }
         handler.postDelayed({
             if (!closed) report(KeyboardReport.ID,byteArrayOf(0,0,0))
             keyBusy = false
